@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -34,31 +35,210 @@ public final class Parser {
     }
 
     public Ast.Stmt parseStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        if (tokens.peek("LET")) {
+            return parseLetStmt();
+        } else if (tokens.peek("DEF")) {
+            return parseDefStmt();
+        } else if (tokens.peek("IF")) {
+            return parseIfStmt();
+        } else if (tokens.peek("FOR")) {
+            return parseForStmt();
+        } else if (tokens.peek("RETURN")) {
+            return parseReturnStmt();
+        } else {
+            return parseExpressionOrAssignmentStmt();
+        }
     }
 
     private Ast.Stmt.Let parseLetStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // let_stmt ::= 'LET' identifier ('=' expr)? ';'
+        checkState(tokens.match("LET"));
+
+        if (!tokens.match(Token.Type.IDENTIFIER)) {
+            throw new ParseException("Expected identifier but found " + tokens.get(0));
+        }
+        var name = tokens.get(-1).literal();
+
+        // Check if Initialization O.W. Declaration
+        Optional<Ast.Expr> value = Optional.empty();
+        if (tokens.match("=")) {
+            value = Optional.of(parseExpr());
+        }
+
+        requireStatementTerminator();
+
+        return new Ast.Stmt.Let(name, value);
     }
 
     private Ast.Stmt.Def parseDefStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // def_stmt ::= 'DEF' identifier '(' (identifier (',' identifier)*)? ')' 'DO' stmt* 'END'
+        checkState(tokens.match("DEF"));
+
+        // Consume function name
+        if (!tokens.match(Token.Type.IDENTIFIER)) {
+            throw new ParseException("Expected identifier but found " + tokens.get(0));
+        }
+
+        var name = tokens.get(-1).literal();
+
+        if (!tokens.match("(")) {
+            throw new ParseException("Expected '(' but found " + tokens.get(0));
+        }
+
+        var parameters = new ArrayList<String>();
+
+        // Check for parameters
+        if (!tokens.peek(")")) {
+            do {
+                if (!tokens.match(Token.Type.IDENTIFIER)) {
+                    throw new ParseException("Expected identifier but found " + tokens.get(0));
+                }
+
+                var param = tokens.get(-1).literal();
+                parameters.add(param);
+            } while (tokens.match(","));
+        }
+
+        if (!tokens.match(")")) {
+            throw new ParseException("Expected ')' but found " + tokens.get(0));
+        }
+
+        if (!tokens.match("DO")) {
+            throw new ParseException("Expected DO but found " + tokens.get(0));
+        }
+
+        // Consume body if exists
+        var body = new ArrayList<Ast.Stmt>();
+        while (!tokens.peek("END")) {
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected statement or 'END' but found neither.");
+            }
+
+            body.add(parseStmt());
+        }
+
+        if (!tokens.match("END")) {
+            throw new ParseException("Expected END but found " + tokens.get(0));
+        }
+
+        return new Ast.Stmt.Def(name, parameters, body);
     }
 
     private Ast.Stmt.If parseIfStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // if_stmt ::= 'IF' expr 'DO' stmt* ('ELSE' stmt*)? 'END'
+        checkState(tokens.match("IF"));
+
+        // Consume condition
+        Ast.Expr condition = parseExpr();
+        if (!tokens.match("DO")) {
+            throw new ParseException("Expected DO but found " + tokens.get(0));
+        }
+
+        // Initialize and consume then body
+        var statements = new ArrayList<Ast.Stmt>();
+        while (!tokens.peek("ELSE") && !tokens.peek("END")) {
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected statement, 'ELSE' or 'END' but found none.");
+            }
+
+            statements.add(parseStmt());
+        }
+
+        // Initialize o.w. body
+        var statementsOtherwise = new ArrayList<Ast.Stmt>();
+
+        // Check if ELSE clause exists
+        if (tokens.match("ELSE")) {
+            while (!tokens.peek("END")) {
+                if (!tokens.has(0)) {
+                    throw new ParseException("Expected statement or 'END' but found neither.");
+                }
+
+                statementsOtherwise.add(parseStmt());
+            }
+        }
+
+        if (!tokens.match("END")) {
+            throw new ParseException("Expected END but found " + tokens.get(0));
+        }
+
+        return new Ast.Stmt.If(condition, statements, statementsOtherwise);
     }
 
     private Ast.Stmt.For parseForStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // for_stmt ::= 'FOR' identifier 'IN' expr 'DO' stmt* 'END'
+        checkState(tokens.match("FOR"));
+
+        // Consume variable denoting current element
+        if (!tokens.match(Token.Type.IDENTIFIER)) {
+            throw new ParseException("Expected Identifier but found " + tokens.get(0));
+        }
+        var name = tokens.get(-1).literal();
+
+        if (!tokens.match("IN")) {
+            throw new ParseException("Expected IN but found " + tokens.get(0));
+        }
+
+        // Consume iterable
+        Ast.Expr expr = parseExpr();
+        if (!tokens.match("DO")) {
+            throw new ParseException("Expected DO but found " + tokens.get(0));
+        }
+
+        // Initialize and consume loop body
+        var statements = new ArrayList<Ast.Stmt>();
+        while (!tokens.peek("END")) {
+            statements.add(parseStmt());
+        }
+
+        if (!tokens.match("END")) {
+            throw new ParseException("Expected END but found " + tokens.get(0));
+        }
+
+        return new Ast.Stmt.For(name, expr, statements);
     }
 
     private Ast.Stmt.Return parseReturnStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // return_stmt ::= 'RETURN' expr? ';'
+        checkState(tokens.match("RETURN"));     // checkState() needed?
+
+        // Check if return expression O.W. return empty
+        Optional<Ast.Expr> expr = Optional.empty();
+        if (!tokens.peek(";")) {
+            expr = Optional.of(parseExpr());
+        }
+
+        requireStatementTerminator();
+
+        return new Ast.Stmt.Return(expr);
     }
 
     private Ast.Stmt parseExpressionOrAssignmentStmt() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // expression_or_assignment_stmt ::= expr ('=' expr)? ';'
+        Ast.Expr expr = parseExpr();
+
+        // Check if Assignment
+        if (tokens.match("=")) {
+            Ast.Expr right = parseExpr();
+
+            // Check statement terminator
+            requireStatementTerminator();
+
+            return new Ast.Stmt.Assignment(expr, right);
+        }
+
+        // O.W. Expression
+        requireStatementTerminator();
+
+        return new Ast.Stmt.Expression(expr);
+    }
+
+    /** Helper function for parseStmt methods.
+     * Checks if ends with semicolon, throwing an error if not. */
+    private void requireStatementTerminator() throws ParseException {
+        if (!tokens.match(";")) {
+            throw new ParseException("Expected ';' but found none.");
+        }
     }
 
     public Ast.Expr parseExpr() throws ParseException {
@@ -163,6 +343,8 @@ public final class Parser {
                 tokens.peek(Token.Type.INTEGER) || tokens.peek(Token.Type.DECIMAL) ||
                 tokens.peek(Token.Type.CHARACTER) || tokens.peek(Token.Type.STRING)) {
             return parseLiteralExpr();
+        } else if (tokens.peek("OBJECT")) {
+            return parseObjectExpr();
         } else if (tokens.peek(Token.Type.IDENTIFIER)) {
             return parseVariableOrFunctionExpr();
         } else if (tokens.peek("(")) {
@@ -240,7 +422,36 @@ public final class Parser {
 
     // SKIP IMPLEMENTATION FOR NOW
     private Ast.Expr.ObjectExpr parseObjectExpr() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // object_expr ::= 'OBJECT' identifier? 'DO' let_stmt* def_stmt* 'END'
+        checkState(tokens.match("OBJECT"));
+
+        Optional<String> name = Optional.empty();
+        if (tokens.match(Token.Type.IDENTIFIER)) {
+            name = Optional.of(tokens.get(-1).literal());
+        }
+
+        if (tokens.match("DO")) {
+            throw new ParseException("Expected DO but found " + tokens.get(0));
+        }
+
+        var fields = new ArrayList<Ast.Stmt.Let>();
+        var methods = new ArrayList<Ast.Stmt.Def>();
+
+        while (!tokens.peek("END")) {
+            if (tokens.peek("LET")) {
+                fields.add(parseLetStmt());
+            } else if (tokens.peek("DEF")) {
+                methods.add(parseDefStmt());
+            } else {
+                throw new ParseException("Expected 'LET', 'DEF' or 'END' but found " + tokens.get(0));
+            }
+        }
+
+        if (!tokens.match("END")) {
+            throw new ParseException("Expected END but found " + tokens.get(0));
+        }
+
+        return new Ast.Expr.ObjectExpr(name, fields, methods);
     }
 
     private Ast.Expr parseVariableOrFunctionExpr() throws ParseException {
@@ -255,7 +466,6 @@ public final class Parser {
             if (!tokens.peek(")")) {
                 do {
                     arguments.add(parsePrimaryExpr());    // Use this when parsePrimaryExpr() has been implemented
-//                    arguments.add(parseExpr());             // Use for current implementation testing
                 } while (tokens.match(","));
 
                 // Check for trailing comma in arguments
