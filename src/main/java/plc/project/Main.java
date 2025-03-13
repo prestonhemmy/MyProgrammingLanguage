@@ -35,7 +35,7 @@ public final class Main {
             }
             try {
                 var tokens = new Lexer(input.toString()).lex();
-                var ast = new Parser(tokens).parseStmt();
+                var ast = new Parser(tokens).parseSource();
                 System.out.println(ast);
             } catch (Exception e) {
                 e.printStackTrace();

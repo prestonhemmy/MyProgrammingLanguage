@@ -8,8 +8,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import plc.project.lexer.Lexer;
 import plc.project.lexer.Token;
 
+import javax.swing.text.html.Option;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -56,6 +58,11 @@ final class ParserTests {
                     new Ast.Stmt.Expression(new Ast.Expr.Variable("second")),
                     new Ast.Stmt.Expression(new Ast.Expr.Variable("third"))
                 ))
+            ),
+            // Additional Testcase
+            Arguments.of("Empty",
+                new Input.Tokens(List.of()),
+                new Ast.Source(List.of())
             )
         );
     }
@@ -94,6 +101,29 @@ final class ParserTests {
                     new Token(Token.Type.IDENTIFIER, "expr")
                 )),
                 null //ParseException
+            ),
+            // Additional Testcase
+            Arguments.of("Complex Initialization",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.OPERATOR, "="),
+                    new Token(Token.Type.IDENTIFIER, "a"),
+                    new Token(Token.Type.OPERATOR, "+"),
+                    new Token(Token.Type.IDENTIFIER, "b"),
+                    new Token(Token.Type.OPERATOR, "*"),
+                    new Token(Token.Type.IDENTIFIER, "c"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                new Ast.Stmt.Let("name", Optional.of(
+                    new Ast.Expr.Binary("+",
+                        new Ast.Expr.Variable("a"),
+                        new Ast.Expr.Binary("*",
+                            new Ast.Expr.Variable("b"),
+                            new Ast.Expr.Variable("c")
+                        )
+                    )
+                ))
             )
         );
     }
@@ -128,6 +158,17 @@ final class ParserTests {
                     new Token(Token.Type.IDENTIFIER, "END")
                 )),
                 new Ast.Stmt.Def("name", List.of("parameter"), List.of())
+            ),
+            // Additional Testcase
+            Arguments.of("Missing DO Keyword",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "DEF"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.OPERATOR, ")"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                null // ParseException
             )
         );
     }
@@ -172,6 +213,53 @@ final class ParserTests {
                     List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("then"))),
                     List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("else")))
                 )
+            ),
+            // Additional Testcases
+            Arguments.of("Empty",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                new Ast.Stmt.If(
+                    new Ast.Expr.Variable("cond"),
+                    List.of(),
+                    List.of()
+                )
+            ),
+            Arguments.of("Nested",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond1"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond2"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "then"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "END"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                new Ast.Stmt.If(
+                    new Ast.Expr.Variable("cond1"),
+                    List.of(
+                        new Ast.Stmt.If(
+                            new Ast.Expr.Variable("cond2"),
+                            List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("then"))),
+                            List.of()
+                        )
+                    ),
+                    List.of()
+                ),
+            Arguments.of("Empty",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond"),
+                    new Token(Token.Type.IDENTIFIER, "DO")
+                )),
+                null // ParseException
+                )
             )
         );
     }
@@ -212,6 +300,34 @@ final class ParserTests {
                     new Token(Token.Type.IDENTIFIER, "END")
                 )),
                 null //ParseException
+            ),
+            // Additional Testcases
+            Arguments.of("Empty Body",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "FOR"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.IDENTIFIER, "IN"),
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                new Ast.Stmt.For(
+                    "name",
+                    new Ast.Expr.Variable("expr"),
+                    List.of()
+                )
+            ),
+            Arguments.of("Missing END Keyword",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "FOR"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.IDENTIFIER, "IN"),
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "stmt"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
             )
         );
     }

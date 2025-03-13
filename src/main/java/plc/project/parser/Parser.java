@@ -31,17 +31,25 @@ public final class Parser {
     }
 
     public Ast.Source parseSource() throws ParseException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // source ::= stmt*
+        var statements = new ArrayList<Ast.Stmt>();
+
+        while (tokens.has(0)) {
+            statements.add(parseStmt());
+        }
+
+        return new Ast.Source(statements);
     }
 
     public Ast.Stmt parseStmt() throws ParseException {
-        if (tokens.peek("LET")) {
+        // new Token(Token.Type.IDENTIFIER, "literal")
+        if (tokens.peek("LET", Token.Type.IDENTIFIER)) {
             return parseLetStmt();
-        } else if (tokens.peek("DEF")) {
+        } else if (tokens.peek("DEF", Token.Type.IDENTIFIER)) {
             return parseDefStmt();
-        } else if (tokens.peek("IF")) {
+        } else if (tokens.peek("IF") && !tokens.peek("IF", ";")) {
             return parseIfStmt();
-        } else if (tokens.peek("FOR")) {
+        } else if (tokens.peek("FOR", Token.Type.IDENTIFIER)) {
             return parseForStmt();
         } else if (tokens.peek("RETURN")) {
             return parseReturnStmt();
@@ -53,10 +61,8 @@ public final class Parser {
     private Ast.Stmt.Let parseLetStmt() throws ParseException {
         // let_stmt ::= 'LET' identifier ('=' expr)? ';'
         checkState(tokens.match("LET"));
+        checkState(tokens.match(Token.Type.IDENTIFIER));
 
-        if (!tokens.match(Token.Type.IDENTIFIER)) {
-            throw new ParseException("Expected identifier but found " + tokens.get(0));
-        }
         var name = tokens.get(-1).literal();
 
         // Check if Initialization O.W. Declaration
@@ -73,11 +79,7 @@ public final class Parser {
     private Ast.Stmt.Def parseDefStmt() throws ParseException {
         // def_stmt ::= 'DEF' identifier '(' (identifier (',' identifier)*)? ')' 'DO' stmt* 'END'
         checkState(tokens.match("DEF"));
-
-        // Consume function name
-        if (!tokens.match(Token.Type.IDENTIFIER)) {
-            throw new ParseException("Expected identifier but found " + tokens.get(0));
-        }
+        checkState(tokens.match(Token.Type.IDENTIFIER));
 
         var name = tokens.get(-1).literal();
 
@@ -138,7 +140,7 @@ public final class Parser {
         var statements = new ArrayList<Ast.Stmt>();
         while (!tokens.peek("ELSE") && !tokens.peek("END")) {
             if (!tokens.has(0)) {
-                throw new ParseException("Expected statement, 'ELSE' or 'END' but found none.");
+                throw new ParseException("Expected statement, 'ELSE' or 'END' but found nothing.");
             }
 
             statements.add(parseStmt());
@@ -168,11 +170,8 @@ public final class Parser {
     private Ast.Stmt.For parseForStmt() throws ParseException {
         // for_stmt ::= 'FOR' identifier 'IN' expr 'DO' stmt* 'END'
         checkState(tokens.match("FOR"));
+        checkState(tokens.match(Token.Type.IDENTIFIER));
 
-        // Consume variable denoting current element
-        if (!tokens.match(Token.Type.IDENTIFIER)) {
-            throw new ParseException("Expected Identifier but found " + tokens.get(0));
-        }
         var name = tokens.get(-1).literal();
 
         if (!tokens.match("IN")) {
@@ -188,6 +187,10 @@ public final class Parser {
         // Initialize and consume loop body
         var statements = new ArrayList<Ast.Stmt>();
         while (!tokens.peek("END")) {
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected statement or 'END' but found neither.");
+            }
+
             statements.add(parseStmt());
         }
 
@@ -237,7 +240,11 @@ public final class Parser {
      * Checks if ends with semicolon, throwing an error if not. */
     private void requireStatementTerminator() throws ParseException {
         if (!tokens.match(";")) {
-            throw new ParseException("Expected ';' but found none.");
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected ';' but found nothing");
+            }
+
+            throw new ParseException("Expected ';' but found " + tokens.get(0));
         }
     }
 
@@ -323,12 +330,12 @@ public final class Parser {
                 // Trailing comma check needed?
 
                 // Check for closing parenthesis
-                if (!tokens.peek(")")) {
+                if (!tokens.match(")")) {
                     throw new ParseException("Expected ')' but found " + tokens.get(0));
                 }
                 expr = new Ast.Expr.Method(expr, name, arguments);
 
-            // O.W. Property
+                // O.W. Property
             } else {
                 expr = new Ast.Expr.Property(expr, name);
             }
@@ -362,10 +369,62 @@ public final class Parser {
             return new Ast.Expr.Literal(true);
         } else if (tokens.match( "FALSE")) {
             return new Ast.Expr.Literal(false);
-        } else if (tokens.match( Token.Type.INTEGER)) {
-            return new Ast.Expr.Literal(new BigInteger(tokens.get(-1).literal()));
-        } else if (tokens.match( Token.Type.DECIMAL)) {
-            return new Ast.Expr.Literal(new BigDecimal(tokens.get(-1).literal()));
+        } else if (tokens.peek( Token.Type.INTEGER) || tokens.peek(Token.Type.DECIMAL)) {
+            boolean isInt = tokens.peek(Token.Type.INTEGER);
+            tokens.match(isInt ? Token.Type.INTEGER : Token.Type.DECIMAL);
+
+            var literal = tokens.get(-1).literal();
+
+            if (tokens.has(0) && tokens.peek(Token.Type.IDENTIFIER)) {
+                var next_token = tokens.get(0).literal();
+
+                // check if negative exponent (decimal)
+                if (next_token.startsWith("e-")) {
+                    tokens.match(Token.Type.IDENTIFIER);
+                    literal = literal + next_token;
+
+                    // assume decimal
+                    try {
+                        BigDecimal decimal = new BigDecimal(literal);
+                        return new Ast.Expr.Literal(decimal);
+                    } catch (NumberFormatException e) {
+                        throw new ParseException("Invalid number format: " + literal);
+                    }
+                }
+            }
+
+            // O.W. non-negative exponent integer or decimal
+            try {
+                if (isInt) {
+                    // assume integer
+                    try {
+                        return new Ast.Expr.Literal(new BigInteger(literal));
+                    } catch (NumberFormatException e) {
+                        // check for exponent
+                        if (literal.toLowerCase().contains("e")) {
+                            BigDecimal decimal = new BigDecimal(literal);
+
+                            // check if exponent integer
+                            try {
+                                return new Ast.Expr.Literal(decimal.toBigIntegerExact());
+                            } catch (ArithmeticException e1) {
+
+                                // O.W. exponent decimal
+                                return new Ast.Expr.Literal(decimal);
+                            }
+                        } else {
+                            throw new ParseException("Unable to parse " + literal + " as a number");        // Reachable?
+                        }
+                    }
+                } else {
+                    // O.W. decimal
+                    return new Ast.Expr.Literal(new BigDecimal(literal));
+                }
+            } catch (NumberFormatException e) {
+                throw new ParseException("Invalid number format: " + literal);
+            }
+
+
         } else if (tokens.match( Token.Type.CHARACTER)) {
             String literal = tokens.get(-1).literal();
             char value = literal.charAt(1);
@@ -407,30 +466,33 @@ public final class Parser {
 
     private Ast.Expr.Group parseGroupExpr() throws ParseException {
         // group_expr ::= '(' expr')'
-        if (tokens.match("(")) {
-//            Ast.Expr expr = parseExpr();        // Change to parsePrimaryExpr() once implemented
-            Ast.Expr expr = parsePrimaryExpr();     // Updated
-            if (!tokens.match(")")) {
-                throw new ParseException("Expected ')' but found " + tokens.get(0));
-            }
+        checkState(tokens.match("("));
 
-            return new Ast.Expr.Group(expr);
-        } else {
-            throw new ParseException("Expected '(' but found " + tokens.get(0));
+        Ast.Expr expr = parsePrimaryExpr();
+
+        if (!tokens.has(0)) {
+            throw new ParseException("Expected ')' but found nothing");
         }
+
+        if (!tokens.match(")")) {
+            throw new ParseException("Expected ')' but found " + tokens.get(0));
+        }
+
+        return new Ast.Expr.Group(expr);
     }
 
-    // SKIP IMPLEMENTATION FOR NOW
     private Ast.Expr.ObjectExpr parseObjectExpr() throws ParseException {
         // object_expr ::= 'OBJECT' identifier? 'DO' let_stmt* def_stmt* 'END'
         checkState(tokens.match("OBJECT"));
 
         Optional<String> name = Optional.empty();
-        if (tokens.match(Token.Type.IDENTIFIER)) {
-            name = Optional.of(tokens.get(-1).literal());
+        if (!tokens.peek("DO")) {
+            if (tokens.match(Token.Type.IDENTIFIER)) {
+                name = Optional.of(tokens.get(-1).literal());
+            }
         }
 
-        if (tokens.match("DO")) {
+        if (!tokens.match("DO")) {
             throw new ParseException("Expected DO but found " + tokens.get(0));
         }
 
@@ -467,11 +529,6 @@ public final class Parser {
                 do {
                     arguments.add(parsePrimaryExpr());    // Use this when parsePrimaryExpr() has been implemented
                 } while (tokens.match(","));
-
-                // Check for trailing comma in arguments
-                if (tokens.peek(",")) {     // TODO: CURRENTLY UNREACHABLE: Error message defaults to parseExpr()
-                    throw new ParseException("Expected a comma separated list of arguments but trailing comma");
-                }
             }
 
             // Check for closing parenthesis
