@@ -68,7 +68,7 @@ public final class Environment {
      * all integers in that range (inclusive, exclusive).
      */
     private static RuntimeValue range(List<RuntimeValue> arguments) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        return new RuntimeValue.Primitive(arguments); // TODO
     }
 
     /**

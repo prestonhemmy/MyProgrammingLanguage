@@ -70,6 +70,7 @@ final class EvaluatorTests {
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testLetStmt(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseSource);
     }
@@ -155,6 +156,7 @@ final class EvaluatorTests {
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testIfStmt(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseSource);
     }
@@ -276,7 +278,7 @@ final class EvaluatorTests {
     void testAssignmentStmt(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseSource);
     }
-
+    // CORE (Variable Test)
     private static Stream<Arguments> testAssignmentStmt() {
         return Stream.of(
             Arguments.of("Variable",
@@ -341,6 +343,7 @@ final class EvaluatorTests {
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testGroupExpr(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseExpr);
     }
@@ -359,6 +362,7 @@ final class EvaluatorTests {
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testBinaryExpr(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseExpr);
     }
@@ -475,11 +479,17 @@ final class EvaluatorTests {
                 new RuntimeValue.Primitive(true),
                 List.of(new RuntimeValue.Primitive(true))
             )
+            // TODO: Add short-circuit for FALSE AND ... case
+            // TODO: Add test cases for adding negative numbers,
+        //                              subtracting negative numbers,
+        //                              adding/subtracting exponents,
+        //                              etc.
         );
     }
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testVariableExpr(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseExpr);
     }
@@ -519,6 +529,7 @@ final class EvaluatorTests {
 
     @ParameterizedTest
     @MethodSource
+    // CORE
     void testFunctionExpr(String test, Input input, RuntimeValue expected, List<RuntimeValue> log) {
         test(input, expected, log, Parser::parseExpr);
     }
