@@ -43,7 +43,7 @@ public final class Parser {
 
     public Ast.Stmt parseStmt() throws ParseException {
         // new Token(Token.Type.IDENTIFIER, "literal")
-        if (tokens.peek("LET", Token.Type.IDENTIFIER)) {
+        if (tokens.peek("LET")) {
             return parseLetStmt();
         } else if (tokens.peek("DEF", Token.Type.IDENTIFIER)) {
             return parseDefStmt();
@@ -61,13 +61,26 @@ public final class Parser {
     private Ast.Stmt.Let parseLetStmt() throws ParseException {
         // let_stmt ::= 'LET' identifier ('=' expr)? ';'
         checkState(tokens.match("LET"));
-        checkState(tokens.match(Token.Type.IDENTIFIER));
+
+        // Handle missing identifier
+        if (!tokens.match(Token.Type.IDENTIFIER)) {
+            throw new ParseException("Expected IDENTIFIER after 'LET' but found " + tokens.get(0));
+        }
 
         var name = tokens.get(-1).literal();
 
         // Check if Initialization O.W. Declaration
         Optional<Ast.Expr> value = Optional.empty();
         if (tokens.match("=")) {
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected expression after '=' but found nothing");
+            }
+
+            // Handle missing value
+            if (tokens.peek(";")) {
+                throw new ParseException("Expected expression after '=' but found ';'");
+            }
+
             value = Optional.of(parseExpr());
         }
 
@@ -207,7 +220,7 @@ public final class Parser {
 
         // Check if return expression O.W. return empty
         Optional<Ast.Expr> expr = Optional.empty();
-        if (!tokens.peek(";")) {
+        if (!tokens.peek(";") && tokens.has(0)) {
             expr = Optional.of(parseExpr());
         }
 
@@ -218,6 +231,12 @@ public final class Parser {
 
     private Ast.Stmt parseExpressionOrAssignmentStmt() throws ParseException {
         // expression_or_assignment_stmt ::= expr ('=' expr)? ';'
+        // Handle missing expression
+        if (tokens.peek(";")) {
+            throw new ParseException("Expected expression but found nothing");
+        }
+
+
         Ast.Expr expr = parseExpr();
 
         // Check if Assignment
@@ -314,7 +333,14 @@ public final class Parser {
 
         // Check if Method or Property
         while (tokens.match(".")) {
+            // Handle missing identifier
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected identifier after '.' but found nothing");
+            }
+
             var name = tokens.get(0).literal();
+
+            // Handle invalid identifier
             if (!tokens.match(Token.Type.IDENTIFIER)) {
                 throw new ParseException("Expected identifier after '.' but found " + tokens.get(0));
             }
@@ -324,13 +350,16 @@ public final class Parser {
                 var arguments = new ArrayList<Ast.Expr>();
                 if (!tokens.peek(")")) {
                     do {
-                        arguments.add(parsePrimaryExpr());
+                        arguments.add(parseExpr());
                     } while (tokens.match(","));
                 }
                 // Trailing comma check needed?
 
                 // Check for closing parenthesis
                 if (!tokens.match(")")) {
+                    if (!tokens.has(0)) {
+                        throw new ParseException("Expected ')' but found nothing");
+                    }
                     throw new ParseException("Expected ')' but found " + tokens.get(0));
                 }
                 expr = new Ast.Expr.Method(expr, name, arguments);
@@ -357,7 +386,10 @@ public final class Parser {
         } else if (tokens.peek("(")) {
             return parseGroupExpr();
         } else {
-            throw new UnsupportedOperationException("Expected primary expression but found " + tokens.get(0));
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected primary expression but found nothing");
+            }
+            throw new ParseException("Expected primary expression but found " + tokens.get(0));
         }
     }
 
@@ -468,7 +500,7 @@ public final class Parser {
         // group_expr ::= '(' expr')'
         checkState(tokens.match("("));
 
-        Ast.Expr expr = parsePrimaryExpr();
+        Ast.Expr expr = parseExpr();
 
         if (!tokens.has(0)) {
             throw new ParseException("Expected ')' but found nothing");
@@ -499,13 +531,23 @@ public final class Parser {
         var fields = new ArrayList<Ast.Stmt.Let>();
         var methods = new ArrayList<Ast.Stmt.Def>();
 
+        boolean def_stmt_reached = false;
+
         while (!tokens.peek("END")) {
             if (tokens.peek("LET")) {
+                // Handle field declaration after method declaration
+                if (def_stmt_reached) {
+                    throw new ParseException("Fields must be declared before method declarations");
+                }
                 fields.add(parseLetStmt());
             } else if (tokens.peek("DEF")) {
+                def_stmt_reached = true;
                 methods.add(parseDefStmt());
             } else {
-                throw new ParseException("Expected 'LET', 'DEF' or 'END' but found " + tokens.get(0));
+                if (tokens.has(0)) {
+                    throw new ParseException("Expected 'LET', 'DEF' or 'END' but found " + tokens.get(0));
+                }
+                throw new ParseException("Expected 'LET', 'DEF', 'END' but found nothing");
             }
         }
 
@@ -527,12 +569,15 @@ public final class Parser {
 
             if (!tokens.peek(")")) {
                 do {
-                    arguments.add(parsePrimaryExpr());    // Use this when parsePrimaryExpr() has been implemented
+                    arguments.add(parseExpr());
                 } while (tokens.match(","));
             }
 
             // Check for closing parenthesis
             if (!tokens.match(")")) {
+                if (!tokens.has(0)) {
+                    throw new ParseException("Expected ')' but found nothing");
+                }
                 throw new ParseException("Expected ')' but found " + tokens.get(0));
             }
 
