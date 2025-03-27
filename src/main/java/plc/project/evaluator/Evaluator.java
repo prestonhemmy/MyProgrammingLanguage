@@ -4,6 +4,7 @@ import plc.project.parser.Ast;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashSet;
 import java.util.List;
 
 public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateException> {
@@ -17,11 +18,19 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
     @Override
     public RuntimeValue visit(Ast.Source ast) throws EvaluateException {
         RuntimeValue value = new RuntimeValue.Primitive(null);
-        for (var stmt : ast.statements()) {
-            value = visit(stmt);
+
+        // Assume function return statement
+        try {
+            for (var stmt : ast.statements()) {
+                value = visit(stmt);
+            }
+
+            return value;
+
+        // O.W. return statement outside of function
+        } catch (ReturnException e) {
+            throw new EvaluateException("Return statement outside of function");
         }
-        //TODO: Handle the possibility of RETURN being called outside of a function.
-        return value;
     }
 
     @Override
@@ -40,11 +49,68 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
         scope.define(ast.name(), value);
 
-        return value;    }
+        return value;
+    }
 
     @Override
     public RuntimeValue visit(Ast.Stmt.Def ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        // check if name already defined in current scope
+        if (scope.get(ast.name(), true).isPresent()) {
+            throw new EvaluateException("Function '" + ast.name() + "' is already defined in the current scope");
+        }
+
+        // check for unique parameters
+        // check for unique parameters - fixed implementation
+        var unique_parameters = new HashSet<>(ast.parameters());
+        if (unique_parameters.size() != ast.parameters().size()) {
+            throw new EvaluateException("Parameters must be unique");
+        }
+
+        // scope where function is defined
+        Scope def_scope = scope;
+
+        // function behavior
+        RuntimeValue.Function.Definition definition = arguments -> {
+            // check if number of arguments passed in matches number of parameters as defined
+            if (arguments.size() != ast.parameters().size()) {
+                throw new EvaluateException("Function '" + ast.name() + "' expects " + ast.parameters().size() +
+                        " arguments, but found " + arguments.size());
+            }
+
+            // scope where function is called
+            Scope caller_scope = scope;
+
+            try {
+                // scope within function definition body
+                scope = new Scope(def_scope);
+
+                for (int i = 0; i < ast.parameters().size(); i++) {
+                    scope.define(ast.parameters().get(i), arguments.get(i));
+                }
+
+                RuntimeValue result = new RuntimeValue.Primitive(null); // Default to NIL
+
+                try {
+                    for (Ast.Stmt stmt : ast.body()) {
+                        result = visit(stmt);
+                    }
+
+                    // return NIL by default
+                    return new RuntimeValue.Primitive(null);
+                } catch (ReturnException returnEx) {
+                    // extract return value
+                    return returnEx.getValue();
+                }
+
+            } finally {
+                scope = caller_scope;   // revert to caller scope
+            }
+        };
+
+        RuntimeValue.Function function = new RuntimeValue.Function(ast.name(), definition);
+        scope.define(ast.name(), function);
+
+        return function;
     }
 
     @Override
@@ -72,12 +138,77 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
     @Override
     public RuntimeValue visit(Ast.Stmt.For ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        RuntimeValue expr = visit(ast.expression());
+
+        RuntimeValue.Primitive primitive = requireType(expr, RuntimeValue.Primitive.class);
+
+        if (primitive.value() == null) {
+            throw new EvaluateException("Expect an iterable, but found NIL");
+        }
+
+        // check if expression is iterable
+        if (!(primitive.value() instanceof Iterable)) {
+            throw new EvaluateException("Expected an iterable, but found " + primitive.value().getClass().getName());
+        }
+
+        Iterable<?> iterable = (Iterable<?>) primitive.value();
+
+        // scope where for loop is entered
+        Scope parent_scope = scope;
+
+        try {
+            for (Object element : iterable) {
+                // scope corresponding to for loop body
+                scope = new Scope(parent_scope);
+
+                // check if element is a RuntimeValue
+                if (!(element instanceof RuntimeValue)) {
+                    throw new EvaluateException("Expected RuntimeValue in iterable, received " +
+                            (element != null ? element.getClass().getName() : "null"));
+                }
+
+                scope.define(ast.name(), (RuntimeValue) element);
+
+                for (Ast.Stmt stmt : ast.body()) {
+                    visit(stmt);
+                }
+            }
+
+            return new RuntimeValue.Primitive(null);
+
+        } finally {
+            // revert to parent scope
+            scope = parent_scope;
+        }
+    }
+
+    /**
+     * Exception class which exits all nested scopes within a function and propagates the return value to the call scope.
+     */
+    public static final class ReturnException extends EvaluateException {
+        public final RuntimeValue value;
+
+        public ReturnException(RuntimeValue value) {
+            super("RETURN statement");
+            this.value = value;
+        }
+
+        public RuntimeValue getValue() {
+            return value;
+        }
     }
 
     @Override
     public RuntimeValue visit(Ast.Stmt.Return ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        RuntimeValue value;
+
+        if(ast.value().isPresent()) {
+            value = visit(ast.value().get());
+        } else {
+            value = new RuntimeValue.Primitive(null);
+        }
+
+        throw new ReturnException(value);
     }
 
     @Override
@@ -87,7 +218,49 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
     @Override
     public RuntimeValue visit(Ast.Stmt.Assignment ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO - Priority: 3 (Variable connection)
+        // Handle variable assignment
+        if (ast.expression() instanceof Ast.Expr.Variable) {
+            String lhs = ((Ast.Expr.Variable) ast.expression()).name();
+
+            // Check variable name exists
+            if (scope.get(lhs, false).isEmpty()) {
+                throw new EvaluateException("Variable '" + lhs + "' is not defined");
+            }
+
+            RuntimeValue rhs = visit(ast.value());
+
+            scope.set(lhs, rhs);
+
+            return rhs;
+
+        // Handle property assignment
+        } else if (ast.expression() instanceof Ast.Expr.Property) {
+            Ast.Expr.Property property = (Ast.Expr.Property) ast.expression();
+
+            RuntimeValue receiver = visit(property.receiver());
+
+            // Check if receiver is an object
+            if (!(receiver instanceof RuntimeValue.ObjectValue)) {
+                throw new EvaluateException("Cannot access property since '" + property.receiver() + "' is not defined");
+            }
+
+            RuntimeValue.ObjectValue object_value = (RuntimeValue.ObjectValue) receiver;
+
+            // Check if property is defined on receiver object
+            var prop = object_value.scope().get(property.name(), false);
+            if (prop.isEmpty()) {
+                throw new EvaluateException("Property '" + property.name() + "' is not defined on '" + property.receiver() + "'");
+            }
+
+            RuntimeValue rhs = visit(ast.value());
+
+            object_value.scope().set(property.name(), rhs);
+
+            return rhs;
+
+        } else {
+            throw new EvaluateException("Expected left-hand side property or variable expression but found " + ast.expression());
+        }
     }
 
     @Override
@@ -313,11 +486,11 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
                     case ">=":
                         return new RuntimeValue.Primitive(comparison >= 0);
                     default:
-                        throw new EvaluateException("Invalid comparison operator: " + ast.operator());
+                        throw new EvaluateException("Invalid comparison operator: '" + ast.operator() + "'");
                 }
 
             default:
-                throw new EvaluateException("Invalid operator: " + ast.operator());
+                throw new EvaluateException("Invalid operator: '" + ast.operator() + "'");
         }
     }
 
@@ -334,7 +507,22 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
     @Override
     public RuntimeValue visit(Ast.Expr.Property ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        RuntimeValue receiver = visit(ast.receiver());
+
+        // Check if receiver is an object
+        if (!(receiver instanceof RuntimeValue.ObjectValue)) {
+            throw new EvaluateException("Cannot access property since '" + ast.receiver() + "' is not defined");
+        }
+
+        RuntimeValue.ObjectValue object_value = (RuntimeValue.ObjectValue) receiver;
+
+        // Check if property is defined on receiver
+        var property = object_value.scope().get(ast.name(), false);
+        if (property.isEmpty()) {
+            throw new EvaluateException("Property '" + ast.name() + "' is not defined on '" + ast.receiver() + "'");
+        }
+
+        return property.get();
     }
 
     @Override
@@ -358,12 +546,36 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
     @Override
     public RuntimeValue visit(Ast.Expr.Method ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        RuntimeValue receiver = visit(ast.receiver());
+
+        // Check if receiver is an object
+        if (!(receiver instanceof RuntimeValue.ObjectValue)) {
+            throw new EvaluateException("Cannot access property since '" + ast.receiver() + "' is not defined");
+        }
+
+        RuntimeValue.ObjectValue object_value = (RuntimeValue.ObjectValue) receiver;
+
+        // Check if method is defined on receiver
+        var method = object_value.scope().get(ast.name(), false);
+        if (method.isEmpty()) {
+            throw new EvaluateException("Property '" + ast.name() + "' is not defined on '" + ast.receiver() + "'");
+        }
+
+        var method_funct = requireType(method.get(), RuntimeValue.Function.class);
+
+        var evaluated_args = new java.util.ArrayList<RuntimeValue>();
+        evaluated_args.add(receiver);
+
+        for (var arg : ast.arguments()) {
+            evaluated_args.add(visit(arg));
+        }
+
+        return method_funct.definition().invoke(evaluated_args);
     }
 
     @Override
     public RuntimeValue visit(Ast.Expr.ObjectExpr ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO
+        throw new UnsupportedOperationException("TODO"); //TODO - Priority: 5
     }
 
     /**
