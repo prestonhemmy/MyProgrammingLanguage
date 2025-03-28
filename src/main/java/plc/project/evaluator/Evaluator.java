@@ -71,7 +71,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
         // function behavior
         RuntimeValue.Function.Definition definition = arguments -> {
-            // check if number of arguments passed in matches number of parameters as defined
+            // check if number of arguments passed in matches arity
             if (arguments.size() != ast.parameters().size()) {
                 throw new EvaluateException("Function '" + ast.name() + "' expects " + ast.parameters().size() +
                         " arguments, but found " + arguments.size());
@@ -185,7 +185,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
     /**
      * Exception class which exits all nested scopes within a function and propagates the return value to the call scope.
      */
-    public static final class ReturnException extends EvaluateException {
+    public static final class ReturnException extends RuntimeException {
         public final RuntimeValue value;
 
         public ReturnException(RuntimeValue value) {
