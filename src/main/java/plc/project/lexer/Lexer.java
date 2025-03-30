@@ -90,9 +90,6 @@ public final class Lexer {
         // Check integer digits exist
         if (!chars.peek("[0-9]")) {
             if (hasSign) {
-//                chars.index--;
-//                chars.length--;
-//                return lexOperator();
                 return new Token(Token.Type.OPERATOR, chars.emit());
             } else {
                 throw new LexException("Invalid number: missing digits");
@@ -105,7 +102,6 @@ public final class Lexer {
         if (isDecimal) {
             // Check decimal digits exist
             if (!chars.match("[0-9]")) {
-//                throw new LexException("Invalid number: missing decimal digits");
                 chars.index--;
                 chars.length--;
                 return new Token(Token.Type.INTEGER, chars.emit());
@@ -117,7 +113,6 @@ public final class Lexer {
         if (chars.match("e")) {
             // Check exponent digits exist
             if (!chars.match("[0-9]")) {
-//                throw new LexException("Invalid number: missing exponent digits");
                 chars.index--;
                 chars.length--;
                 return new Token(Token.Type.INTEGER, chars.emit());
