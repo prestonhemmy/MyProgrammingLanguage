@@ -1,5 +1,8 @@
 package plc.project.evaluator;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,7 +71,31 @@ public final class Environment {
      * all integers in that range (inclusive, exclusive).
      */
     private static RuntimeValue range(List<RuntimeValue> arguments) throws EvaluateException {
-        return new RuntimeValue.Primitive(arguments); // TODO
+        if (arguments.size() != 2) {
+            throw new EvaluateException("Function range() expects 2 arguments");
+        }
+
+        // check if arguments are BigIntegers
+        if (!(arguments.get(0) instanceof RuntimeValue.Primitive first) ||
+                !(arguments.get(1) instanceof RuntimeValue.Primitive last) ||
+                !(first.value() instanceof BigInteger) || !(last.value() instanceof BigInteger)) {
+            throw new EvaluateException("Function range() expects integer arguments");
+        }
+
+        var start = (BigInteger) first.value();
+        var end = (BigInteger) last.value();
+
+        // check if start < end
+        if (start.compareTo(end) > 0) {
+            throw new EvaluateException("Start value must be less than end value for range() function");
+        }
+
+        var result = new ArrayList<RuntimeValue>();
+        for (var i = start; i.compareTo(end) < 0; i = i.add(java.math.BigInteger.valueOf(1))) {
+            result.add(new RuntimeValue.Primitive(i));
+        }
+
+        return new RuntimeValue.Primitive(result);
     }
 
     /**

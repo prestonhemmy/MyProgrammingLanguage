@@ -44,7 +44,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         if (ast.value().isPresent()) {
             value = visit(ast.value().get());
         } else {
-            value = new RuntimeValue.Primitive(null); // NIL
+            value = new RuntimeValue.Primitive(null);
         }
 
         scope.define(ast.name(), value);
@@ -60,7 +60,6 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         }
 
         // check for unique parameters
-        // check for unique parameters - fixed implementation
         var unique_parameters = new HashSet<>(ast.parameters());
         if (unique_parameters.size() != ast.parameters().size()) {
             throw new EvaluateException("Parameters must be unique");
@@ -97,9 +96,9 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
                     // return NIL by default
                     return new RuntimeValue.Primitive(null);
-                } catch (ReturnException returnEx) {
+                } catch (ReturnException e) {
                     // extract return value
-                    return returnEx.getValue();
+                    return e.getValue();
                 }
 
             } finally {
@@ -413,9 +412,6 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
                         throw new EvaluateException("Divide by zero error");
                     }
 
-                    // TODO: Check if division results in decimal and update type
-                    //  If decimal then also requires rounding
-
                     return new RuntimeValue.Primitive(((BigInteger)left_primitive.value()).divide(right_int));
                 }
 
@@ -575,7 +571,87 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
     @Override
     public RuntimeValue visit(Ast.Expr.ObjectExpr ast) throws EvaluateException {
-        throw new UnsupportedOperationException("TODO"); //TODO - Priority: 5
+        var object_scope = new Scope(scope);
+
+        var object_value = new RuntimeValue.ObjectValue(ast.name(), new Scope(object_scope));
+
+        // property handling
+        for (var field : ast.fields()) {
+            // check if field name already defined in object scope
+            if (object_scope.get(field.name(), false).isPresent()) {
+                throw new EvaluateException("Variable '" + field.name() + "' is already defined in '" + ast.name() + "'s' scope");
+            }
+
+            RuntimeValue value;
+            if (field.value().isPresent()) {
+                value = visit(field.value().get());
+            } else {
+                value = new RuntimeValue.Primitive(null);
+            }
+
+            object_scope.define(field.name(), value);
+            }
+
+        // method handling
+        Scope def_scope = scope;            // scope where object is defined
+
+        for (var method : ast.methods()) {
+            // check if name already defined in current scope
+            if (object_scope.get(method.name(), true).isPresent()) {
+                throw new EvaluateException("Method '" + method.name() + "' is already defined in '" + ast.name() + "'s' scope");
+            }
+
+            // check for unique parameters
+            var unique_parameters = new HashSet<>(method.parameters());
+            if (unique_parameters.size() != method.parameters().size()) {
+                throw new EvaluateException("Method parameters must be unique");
+            }
+
+            // method behavior
+            RuntimeValue.Function.Definition definition = arguments -> {
+                // check if number of arguments passed in matches arity
+                if (arguments.size() != method.parameters().size() + 1) {
+                    throw new EvaluateException("Method '" + method.name() + "' expects " + method.parameters().size() +
+                            " arguments, but found " + (arguments.size() - 1));
+                }
+
+                // scope where method is called
+                Scope caller_scope = scope;
+
+                try {
+                    // scope within method definition body
+                    scope = new Scope(def_scope);
+
+                    scope.define("this", arguments.getFirst());
+
+                    for (int i = 0; i < method.parameters().size(); i++) {
+                        scope.define(method.parameters().get(i), arguments.get(i + 1));
+                    }
+
+                    RuntimeValue result = new RuntimeValue.Primitive(null); // Default to NIL
+
+                    try {
+                        for (Ast.Stmt stmt : method.body()) {
+                            result = visit(stmt);
+                        }
+
+                        // return NIL by default
+                        return new RuntimeValue.Primitive(null);
+                    } catch (ReturnException e) {
+                        // extract return value
+                        return e.getValue();
+                    }
+
+                } finally {
+                    scope = caller_scope;   // revert to caller scope
+                }
+            };
+
+            RuntimeValue.Function function = new RuntimeValue.Function(method.name(), definition);
+            object_scope.define(method.name(), function);
+        }
+
+        return object_value;
     }
 
     /**
