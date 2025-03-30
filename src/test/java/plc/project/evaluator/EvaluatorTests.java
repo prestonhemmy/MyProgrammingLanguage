@@ -108,6 +108,30 @@ final class EvaluatorTests {
                 ))),
                 new RuntimeValue.Primitive(null),
                 List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Initialization with complex expression",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Let("result", Optional.of(
+                        new Ast.Expr.Binary(
+                            "+",
+                            new Ast.Expr.Literal(new BigInteger("5")),
+                            new Ast.Expr.Literal(new BigInteger("3"))
+                        )
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Variable("result"))))
+                ))),
+                new RuntimeValue.Primitive(new BigInteger("8")),
+                List.of(new RuntimeValue.Primitive(new BigInteger("8")))
+            ),
+            Arguments.of("Initialization with exception-throwing expression",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Let("result", Optional.of(
+                        new Ast.Expr.Variable("undefinedVariable")
+                    ))
+                ))),
+                null, // EvaluateException
+                List.of()
             )
         );
     }
@@ -150,6 +174,58 @@ final class EvaluatorTests {
                 ))),
                 new RuntimeValue.Primitive("value"),
                 List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Function with duplicate parameters",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("duplicate", List.of("param", "param"), List.of(
+                        new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("called"))))
+                    ))
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Function with wrong argument count",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("twoParams", List.of("p1", "p2"), List.of(
+                        new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("called"))))
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("twoParams", List.of(new Ast.Expr.Literal("one"))))
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Function accessing parent scope",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Let("outer", Optional.of(new Ast.Expr.Literal("value"))),
+                    new Ast.Stmt.Def("funct", List.of(), List.of(
+                        new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Variable("outer"))))
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("funct", List.of()))
+                ))),
+                new RuntimeValue.Primitive(null),
+                List.of(new RuntimeValue.Primitive("value"))
+            ),
+            Arguments.of("Multiple return statements (first takes precedence)",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("multiReturn", List.of(), List.of(
+                        new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("before return")))),
+                        new Ast.Stmt.Return(Optional.of(new Ast.Expr.Literal("first"))),
+                        new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("never reached")))),
+                        new Ast.Stmt.Return(Optional.of(new Ast.Expr.Literal("second")))
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("multiReturn", List.of()))
+                ))),
+                new RuntimeValue.Primitive("first"),
+                List.of(new RuntimeValue.Primitive("before return"))
+            ),
+            Arguments.of("Redefining existing function",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("sameName", List.of(), List.of()),
+                    new Ast.Stmt.Def("sameName", List.of(), List.of())
+                ))),
+                null, // EvaluateException
+                List.of()
             )
         );
     }
@@ -184,6 +260,86 @@ final class EvaluatorTests {
                 ))),
                 new RuntimeValue.Primitive("else"),
                 List.of(new RuntimeValue.Primitive("else"))
+            ),
+            // Additional Testcases
+            Arguments.of("Invalid condition",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Literal(new BigInteger("1")),
+                        List.of(new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("then"))))),
+                        List.of()
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Empty then body",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Literal(true),
+                        List.of(),
+                        List.of(new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("else")))))
+                    )
+                ))),
+                new RuntimeValue.Primitive(null),
+                List.of()
+            ),
+            Arguments.of("Empty else body",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Literal(false),
+                        List.of(new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("then"))))),
+                        List.of()
+                    )
+                ))),
+                new RuntimeValue.Primitive(null),
+                List.of()
+            ),
+            Arguments.of("Assignment in then body",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Let("x", Optional.of(new Ast.Expr.Literal(new BigInteger("1")))),
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Literal(true),
+                        List.of(
+                            new Ast.Stmt.Assignment(
+                                new Ast.Expr.Variable("x"),
+                                new Ast.Expr.Literal(new BigInteger("2"))
+                            ),
+                            new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Variable("x"))))
+                        ),
+                        List.of()
+                    )
+                ))),
+                new RuntimeValue.Primitive(new BigInteger("2")),
+                List.of(new RuntimeValue.Primitive(new BigInteger("2")))
+            ),
+            Arguments.of("Nested if statements",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Literal(true),
+                        List.of(
+                            new Ast.Stmt.If(
+                                new Ast.Expr.Literal(true),
+                                List.of(new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal("nested-then"))))),
+                                List.of()
+                            )
+                        ),
+                        List.of()
+                    )
+                ))),
+                new RuntimeValue.Primitive("nested-then"),
+                List.of(new RuntimeValue.Primitive("nested-then"))
+            ),
+            Arguments.of("Exception in condition evaluation",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.If(
+                        new Ast.Expr.Variable("undefined"),
+                        List.of(),
+                        List.of()
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
             )
         );
     }
@@ -214,6 +370,67 @@ final class EvaluatorTests {
                     new RuntimeValue.Primitive(new BigInteger("2")),
                     new RuntimeValue.Primitive(new BigInteger("3"))
                 )
+            ),
+            // Additional Testcases
+            Arguments.of("Empty iterable",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.For(
+                        "element",
+                        new Ast.Expr.Function("list", List.of()),
+                        List.of(new Ast.Stmt.Expression(new Ast.Expr.Function("log", List.of(new Ast.Expr.Variable("element")))))
+                    )
+                ))),
+                new RuntimeValue.Primitive(null),
+                List.of()
+            ),
+            Arguments.of("Value not iterable",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.For(
+                        "element",
+                        new Ast.Expr.Literal(new BigInteger("5")),
+                        List.of()
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("NIL iterable",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.For(
+                        "element",
+                        new Ast.Expr.Literal(null),
+                        List.of()
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Nested for loops",
+                new Input.Program("""
+                    FOR i IN list(1, 2) DO
+                        FOR j IN list("a", "b") DO
+                            log(i + j);
+                        END
+                    END
+                """),
+                new RuntimeValue.Primitive(null),
+                List.of(
+                    new RuntimeValue.Primitive("1a"),
+                    new RuntimeValue.Primitive("1b"),
+                    new RuntimeValue.Primitive("2a"),
+                    new RuntimeValue.Primitive("2b")
+                )
+            ),
+            Arguments.of("Variable shadowing in for loop",
+                new Input.Program("""
+                    LET element = "outer";
+                    FOR element IN list("inner") DO
+                        log(element);
+                    END
+                    log(element);
+                """),
+                new RuntimeValue.Primitive("outer"),
+                List.of(new RuntimeValue.Primitive("inner"), new RuntimeValue.Primitive("outer"))
             )
         );
     }
@@ -243,6 +460,31 @@ final class EvaluatorTests {
                     new Ast.Stmt.Return(Optional.empty())
                 ))),
                 null, //EvaluateException
+                List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Return with exception-throwing expression",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("funct", List.of(), List.of(
+                        new Ast.Stmt.Return(Optional.of(new Ast.Expr.Variable("undefinedVariable")))
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("funct", List.of()))
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Return in nested scope within function",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Def("funct", List.of(), List.of(
+                        new Ast.Stmt.If(
+                            new Ast.Expr.Literal(true),
+                            List.of(new Ast.Stmt.Return(Optional.of(new Ast.Expr.Literal("nested")))),
+                            List.of()
+                        )
+                    )),
+                    new Ast.Stmt.Expression(new Ast.Expr.Function("funct", List.of()))
+                ))),
+                new RuntimeValue.Primitive("nested"),
                 List.of()
             )
         );
@@ -305,6 +547,50 @@ final class EvaluatorTests {
                 ))),
                 new RuntimeValue.Primitive(null),
                 List.of(new RuntimeValue.Primitive("value"))
+            ),
+            // Additional Testcases
+            Arguments.of("Assign to undefined variable",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Assignment(
+                        new Ast.Expr.Variable("undefinedVariable"),
+                        new Ast.Expr.Literal("value")
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Assign with exception-throwing expression",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Let("x", Optional.of(new Ast.Expr.Literal(new BigInteger("1")))),
+                    new Ast.Stmt.Assignment(
+                        new Ast.Expr.Variable("x"),
+                        new Ast.Expr.Variable("undefinedVariable")
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Assign to variable in parent scope",
+                new Input.Program("""
+                    LET x = 1;
+                    IF TRUE DO
+                        x = 2;
+                        log(x);
+                    END
+                    log(x);
+                """),
+                new RuntimeValue.Primitive(new BigInteger("2")),
+                List.of(new RuntimeValue.Primitive(new BigInteger("2")), new RuntimeValue.Primitive(new BigInteger("2")))
+            ),
+            Arguments.of("Assign to non variable/property",
+                new Input.Ast(new Ast.Source(List.of(
+                    new Ast.Stmt.Assignment(
+                        new Ast.Expr.Literal("literal"),
+                        new Ast.Expr.Literal("value")
+                    )
+                ))),
+                null, // EvaluateException
+                List.of()
             )
         );
     }
@@ -337,6 +623,28 @@ final class EvaluatorTests {
                 ),
                 new RuntimeValue.Primitive("string"),
                 List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Null/NIL Literal",
+                new Input.Ast(
+                    new Ast.Expr.Literal(null)
+                ),
+                new RuntimeValue.Primitive(null),
+                List.of()
+            ),
+            Arguments.of("Large Integer Literal",
+                new Input.Ast(
+                    new Ast.Expr.Literal(new BigInteger("9999999999999999999999"))
+                ),
+                new RuntimeValue.Primitive(new BigInteger("9999999999999999999999")),
+                List.of()
+            ),
+            Arguments.of("Special String Characters",
+                new Input.Ast(
+                    new Ast.Expr.Literal("Line 1\nLine 2\t\"quoted\"")
+                ),
+                new RuntimeValue.Primitive("Line 1\nLine 2\t\"quoted\""),
+                List.of()
             )
         );
     }
@@ -355,6 +663,40 @@ final class EvaluatorTests {
                     new Ast.Expr.Group(new Ast.Expr.Literal("expr"))
                 ),
                 new RuntimeValue.Primitive("expr"),
+                List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Nested group expressions",
+                new Input.Ast(
+                    new Ast.Expr.Group(
+                        new Ast.Expr.Group(
+                            new Ast.Expr.Literal("nested")
+                        )
+                    )
+                ),
+                new RuntimeValue.Primitive("nested"),
+                List.of()
+            ),
+            Arguments.of("Group with complex binary expression",
+                new Input.Ast(
+                    new Ast.Expr.Group(
+                        new Ast.Expr.Binary(
+                            "+",
+                            new Ast.Expr.Literal(new BigInteger("3")),
+                            new Ast.Expr.Literal(new BigInteger("7"))
+                        )
+                    )
+                ),
+                new RuntimeValue.Primitive(new BigInteger("10")),
+                List.of()
+            ),
+            Arguments.of("Group with exception-throwing expression",
+                new Input.Ast(
+                    new Ast.Expr.Group(
+                        new Ast.Expr.Variable("undefined")
+                    )
+                ),
+                null, // EvaluateException
                 List.of()
             )
         );
@@ -478,12 +820,85 @@ final class EvaluatorTests {
                 ),
                 new RuntimeValue.Primitive(true),
                 List.of(new RuntimeValue.Primitive(true))
+            ),
+            // Additional Testcases
+            Arguments.of("OpAND False Short-Circuit",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "AND",
+                        new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal(false))),
+                        new Ast.Expr.Function("log", List.of(new Ast.Expr.Literal(true)))
+                    )
+                ),
+                new RuntimeValue.Primitive(false),
+                List.of(new RuntimeValue.Primitive(false))
+            ),
+            Arguments.of("Negative number addition",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "+",
+                        new Ast.Expr.Literal(new BigInteger("-5")),
+                        new Ast.Expr.Literal(new BigInteger("3"))
+                    )
+                ),
+                new RuntimeValue.Primitive(new BigInteger("-2")),
+                List.of()
+            ),
+            Arguments.of("String concatenation with NIL",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "+",
+                        new Ast.Expr.Literal("string-"),
+                        new Ast.Expr.Literal(null)
+                    )
+                ),
+                new RuntimeValue.Primitive("string-NIL"),
+                List.of()
+            ),
+            Arguments.of("Type mismatch in arithmetic",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "*",
+                        new Ast.Expr.Literal(new BigInteger("5")),
+                        new Ast.Expr.Literal(new BigDecimal("3.14"))
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Decimal division rounding",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "/",
+                        new Ast.Expr.Literal(new BigDecimal("10.0")),
+                        new Ast.Expr.Literal(new BigDecimal("3.0"))
+                    )
+                ),
+                new RuntimeValue.Primitive(new BigDecimal("3.3")),
+                List.of()
+            ),
+            Arguments.of("Division by zero with integer",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "/",
+                        new Ast.Expr.Literal(new BigInteger("10")),
+                        new Ast.Expr.Literal(new BigInteger("0"))
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Comparison with incomparable types",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "<",
+                        new Ast.Expr.Literal(new BigInteger("5")),
+                        new Ast.Expr.Literal("string")
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
             )
-            // TODO: Add short-circuit for FALSE AND ... case
-            // TODO: Add test cases for adding negative numbers,
-        //                              subtracting negative numbers,
-        //                              adding/subtracting exponents,
-        //                              etc.
         );
     }
 
@@ -501,6 +916,14 @@ final class EvaluatorTests {
                     new Ast.Expr.Variable("variable")
                 ),
                 new RuntimeValue.Primitive("variable"),
+                List.of()
+            ),
+            // Additional Testcase
+            Arguments.of("Undefined variable",
+                new Input.Ast(
+                        new Ast.Expr.Variable("undefinedVariable")
+                ),
+                null, // EvaluateException
                 List.of()
             )
         );
@@ -522,6 +945,31 @@ final class EvaluatorTests {
                     )
                 ),
                 new RuntimeValue.Primitive("property"),
+                List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Property access on non-object",
+                new Input.Ast(
+                    new Ast.Expr.Property(
+                        new Ast.Expr.Literal(new BigInteger("5")),
+                        "property"
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Undefined property",
+                new Input.Ast(
+                    new Ast.Expr.Property(
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value")))),
+                            List.of()
+                        ),
+                        "undefinedProperty"
+                    )
+                ),
+                null, // EvaluateException
                 List.of()
             )
         );
@@ -560,6 +1008,30 @@ final class EvaluatorTests {
                 ),
                 null, //EvaluateException
                 List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Function with name conflict",
+                new Input.Program("""
+                    LET funct = "variable";
+                    DEF funct() DO
+                        RETURN "function";
+                    END
+                    log(funct);
+                """),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Exception in argument evaluation",
+                new Input.Ast(
+                    new Ast.Expr.Function(
+                        "function",
+                        List.of(
+                            new Ast.Expr.Variable("undefined")
+                        )
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
             )
         );
     }
@@ -581,6 +1053,52 @@ final class EvaluatorTests {
                     )
                 ),
                 new RuntimeValue.Primitive(List.of(new RuntimeValue.Primitive("argument"))),
+                List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Method on non object",
+                new Input.Ast(
+                    new Ast.Expr.Method(
+                        new Ast.Expr.Literal("string"),
+                        "method",
+                        List.of()
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Undefined method",
+                new Input.Ast(
+                    new Ast.Expr.Method(
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(),
+                            List.of()
+                        ),
+                        "undefined",
+                        List.of()
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Method with wrong arity",
+                new Input.Ast(
+                    new Ast.Expr.Method(
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(),
+                            List.of(new Ast.Stmt.Def(
+                                "method",
+                                List.of("parameter"),
+                                List.of()
+                            ))
+                        ),
+                        "method",
+                        List.of(new Ast.Expr.Literal("arg1"), new Ast.Expr.Literal("arg2"))
+                    )
+                ),
+                null, // EvaluateException
                 List.of()
             )
         );
@@ -655,6 +1173,48 @@ final class EvaluatorTests {
                     )
                 ),
                 new RuntimeValue.Primitive("argument"),
+                List.of()
+            ),
+            // Additional Testcases
+            Arguments.of("Object with duplicate field names",
+                new Input.Ast(
+                    new Ast.Expr.ObjectExpr(
+                        Optional.empty(),
+                        List.of(
+                            new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value1"))),
+                            new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value2")))
+                        ),
+                        List.of()
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Object with duplicate method names",
+                new Input.Ast(
+                    new Ast.Expr.ObjectExpr(
+                        Optional.empty(),
+                        List.of(),
+                        List.of(
+                            new Ast.Stmt.Def("method", List.of(), List.of()),
+                            new Ast.Stmt.Def("method", List.of(), List.of())
+                        )
+                    )
+                ),
+                null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Object with field initializer that throws exception",
+                new Input.Ast(
+                    new Ast.Expr.ObjectExpr(
+                        Optional.empty(),
+                        List.of(
+                                new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Variable("undefinedVariable")))
+                        ),
+                        List.of()
+                    )
+                ),
+                null, // EvaluateException
                 List.of()
             )
         );
