@@ -61,8 +61,10 @@ final class ParserTests {
             ),
             // Additional Testcase
             Arguments.of("Empty",
-                new Input.Tokens(List.of()),
-                new Ast.Source(List.of())
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
             )
         );
     }
@@ -124,6 +126,32 @@ final class ParserTests {
                         )
                     )
                 ))
+            ),
+            Arguments.of("Missing Name",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.OPERATOR, "="),
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Value",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.OPERATOR, "="),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Value and Semicolon",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.OPERATOR, "=")
+                )),
+                null // ParseException
             )
         );
     }
@@ -251,14 +279,62 @@ final class ParserTests {
                         )
                     ),
                     List.of()
-                ),
-            Arguments.of("Empty",
+                )
+            ),
+            Arguments.of("Inner Nested Else",
                 new Input.Tokens(List.of(
                     new Token(Token.Type.IDENTIFIER, "IF"),
-                    new Token(Token.Type.IDENTIFIER, "cond"),
-                    new Token(Token.Type.IDENTIFIER, "DO")
+                    new Token(Token.Type.IDENTIFIER, "cond1"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond2"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "then"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "ELSE"),
+                    new Token(Token.Type.IDENTIFIER, "else"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "END"),
+                    new Token(Token.Type.IDENTIFIER, "END")
                 )),
-                null // ParseException
+                new Ast.Stmt.If(
+                    new Ast.Expr.Variable("cond1"),
+                    List.of(
+                        new Ast.Stmt.If(
+                            new Ast.Expr.Variable("cond2"),
+                            List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("then"))),
+                            List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("else")))
+                        )
+                    ),
+                    List.of()
+                )
+            ),
+            Arguments.of("Outer Nested Else",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond1"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "IF"),
+                    new Token(Token.Type.IDENTIFIER, "cond2"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "then"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "END"),
+                    new Token(Token.Type.IDENTIFIER, "ELSE"),
+                    new Token(Token.Type.IDENTIFIER, "else"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                new Ast.Stmt.If(
+                    new Ast.Expr.Variable("cond1"),
+                    List.of(
+                        new Ast.Stmt.If(
+                            new Ast.Expr.Variable("cond2"),
+                            List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("then"))),
+                            List.of()
+                        )
+                    ),
+                    List.of(new Ast.Stmt.Expression(new Ast.Expr.Variable("else")))
                 )
             )
         );
@@ -346,6 +422,28 @@ final class ParserTests {
                     new Token(Token.Type.OPERATOR, ";")
                 )),
                 new Ast.Stmt.Return(Optional.empty())
+            ),
+            // Additional Testcases
+            Arguments.of("Return Value",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "RETURN"),
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                new Ast.Stmt.Return(Optional.of(new Ast.Expr.Variable("expr")))
+            ),
+            Arguments.of("Missing Semicolon After Value",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "RETURN"),
+                    new Token(Token.Type.IDENTIFIER, "expr")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Semicolon After RETURN",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "RETURN")
+                )),
+                null // ParseException
             )
         );
     }
@@ -379,6 +477,14 @@ final class ParserTests {
                     new Token(Token.Type.IDENTIFIER, "variable")
                 )),
                 null //ParseException
+            ),
+            // Additional Testcases
+            Arguments.of("Invalid Expression",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.OPERATOR, "?"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
             )
         );
     }
@@ -488,6 +594,30 @@ final class ParserTests {
                     new Token(Token.Type.OPERATOR, ")")
                 )),
                 new Ast.Expr.Group(new Ast.Expr.Variable("expr"))
+            ),
+            // Additional Testcases
+            Arguments.of("Int Addition Expression",
+                new Input.Tokens(List.of(
+                        new Token(Token.Type.OPERATOR, "("),
+                        new Token(Token.Type.INTEGER, "1"),
+                        new Token(Token.Type.OPERATOR, "+"),
+                        new Token(Token.Type.INTEGER, "2"),
+                        new Token(Token.Type.OPERATOR, ")")
+                )),
+                new Ast.Expr.Group(
+                        new Ast.Expr.Binary(
+                            "+",
+                            new Ast.Expr.Literal(new BigInteger("1")),
+                            new Ast.Expr.Literal(new BigInteger("2"))
+                        )
+                )
+            ),
+            Arguments.of("Missing Expression",
+                    new Input.Tokens(List.of(
+                            new Token(Token.Type.OPERATOR, "("),
+                            new Token(Token.Type.OPERATOR, ")")
+                    )),
+                    null // ParseException
             )
         );
     }
@@ -577,6 +707,42 @@ final class ParserTests {
                     ),
                     new Ast.Expr.Variable("third")
                 )
+            ),
+            // Additional Testcases
+            Arguments.of("Logical Missing Operand",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.IDENTIFIER, "AND")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Comparison Missing Operand",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.OPERATOR, "==")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Multiplicative Missing Operand",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.OPERATOR, "*")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Additive Missing Operand",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "expr"),
+                    new Token(Token.Type.OPERATOR, "+")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Left Operand",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.OPERATOR, "-"),
+                    new Token(Token.Type.IDENTIFIER, "expr")
+                )),
+                null // ParseException
             )
         );
     }
@@ -616,6 +782,22 @@ final class ParserTests {
                     new Ast.Expr.Variable("receiver"),
                     "property"
                 )
+            ),
+            // Additional Testcases
+            Arguments.of("Missing Identifier After Dot",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "receiver"),
+                    new Token(Token.Type.OPERATOR, ".")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Invalid Identifier After Dot",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "receiver"),
+                    new Token(Token.Type.OPERATOR, "."),
+                    new Token(Token.Type.OPERATOR, "+")
+                )),
+                null // ParseException
             )
         );
     }
@@ -646,6 +828,46 @@ final class ParserTests {
                 new Ast.Expr.Function("function", List.of(
                     new Ast.Expr.Variable("argument")
                 ))
+            ),
+            // Additional Testcases
+            Arguments.of("Multiple Arguments",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "function"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "argument1"),
+                    new Token(Token.Type.IDENTIFIER, ","),
+                    new Token(Token.Type.IDENTIFIER, "argument2"),
+                    new Token(Token.Type.IDENTIFIER, ","),
+                    new Token(Token.Type.IDENTIFIER, "argument3"),
+                    new Token(Token.Type.OPERATOR, ")")
+                )),
+                new Ast.Expr.Function("function", List.of(
+                    new Ast.Expr.Variable("argument1"),
+                    new Ast.Expr.Variable("argument2"),
+                    new Ast.Expr.Variable("argument3")
+                ))
+            ),
+            Arguments.of("Trailing Comma",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "function"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "argument1"),
+                    new Token(Token.Type.IDENTIFIER, ","),
+                    new Token(Token.Type.IDENTIFIER, "argument2"),
+                    new Token(Token.Type.IDENTIFIER, ","),
+                    new Token(Token.Type.IDENTIFIER, "argument3"),
+                    new Token(Token.Type.IDENTIFIER, ","),
+                    new Token(Token.Type.OPERATOR, ")")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Closing Parenthesis",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "function"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "argument")
+                )),
+                null // ParseException
             )
         );
     }
@@ -670,6 +892,54 @@ final class ParserTests {
                     new Ast.Expr.Variable("receiver"),
                     "method",
                     List.of()
+                )
+            ),
+            // Additional Testcases
+            Arguments.of("Trailing Comma",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "receiver"),
+                    new Token(Token.Type.OPERATOR, "."),
+                    new Token(Token.Type.IDENTIFIER, "method"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "argument"),
+                    new Token(Token.Type.OPERATOR, ","),
+                    new Token(Token.Type.OPERATOR, ")")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing Closing Parenthesis",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "receiver"),
+                    new Token(Token.Type.OPERATOR, "."),
+                    new Token(Token.Type.IDENTIFIER, "method"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "argument")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Nested Method Call",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "outer"),
+                    new Token(Token.Type.OPERATOR, "."),
+                    new Token(Token.Type.IDENTIFIER, "method"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.IDENTIFIER, "inner"),
+                    new Token(Token.Type.OPERATOR, "."),
+                    new Token(Token.Type.IDENTIFIER, "method"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.OPERATOR, ")"),
+                    new Token(Token.Type.OPERATOR, ")")
+                )),
+                new Ast.Expr.Method(
+                    new Ast.Expr.Variable("outer"),
+                    "method",
+                    List.of(
+                        new Ast.Expr.Method(
+                            new Ast.Expr.Variable("inner"),
+                            "method",
+                            List.of()
+                        )
+                    )
                 )
             )
         );
@@ -715,6 +985,47 @@ final class ParserTests {
                     List.of(),
                     List.of(new Ast.Stmt.Def("method", List.of(), List.of()))
                 )
+            ),
+            // Additional Testcases
+            Arguments.of("Missing DO",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "OBJECT"),
+                    new Token(Token.Type.IDENTIFIER, "name"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Field After Method",
+                // OBJECT DO
+                //   DEF method() DO
+                //   END
+                //   LET field;
+                // END
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "OBJECT"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "DEF"),
+                    new Token(Token.Type.IDENTIFIER, "method"),
+                    new Token(Token.Type.OPERATOR, "("),
+                    new Token(Token.Type.OPERATOR, ")"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "END"),
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.IDENTIFIER, "field"),
+                    new Token(Token.Type.OPERATOR, ";"),
+                    new Token(Token.Type.IDENTIFIER, "END")
+                )),
+                null // ParseException
+            ),
+            Arguments.of("Missing END",
+                new Input.Tokens(List.of(
+                    new Token(Token.Type.IDENTIFIER, "OBJECT"),
+                    new Token(Token.Type.IDENTIFIER, "DO"),
+                    new Token(Token.Type.IDENTIFIER, "LET"),
+                    new Token(Token.Type.IDENTIFIER, "field"),
+                    new Token(Token.Type.OPERATOR, ";")
+                )),
+                null // ParseException
             )
         );
     }
