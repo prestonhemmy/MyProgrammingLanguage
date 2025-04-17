@@ -39,7 +39,7 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
         // let_stmt ::= 'LET' identifier (':' identifier)? ('=' expr)? ';'
         // check if name already defined
         if (scope.get(ast.name(), true).isPresent()) {
-            throw new AnalyzeException("Variable '" + ast.name() + "' is already defined in the current scope");
+            throw new AnalyzeException("'" + ast.name() + "' is already defined in the current scope");
         }
 
         Optional<Type> type = Optional.empty();
@@ -82,7 +82,7 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
         //              ')' (':' identifier)? 'DO' stmt* 'END'
         // check if name already defined in current scope
         if (scope.get(ast.name(), true).isPresent()) {
-            throw new AnalyzeException("Function '" + ast.name() + "' is already defined in the current scope");
+            throw new AnalyzeException("'" + ast.name() + "' is already defined in the current scope");
         }
 
         // check for unique parameters
@@ -242,7 +242,9 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
         if (lhs instanceof Ir.Expr.Variable) {
             Ir.Expr.Variable variable = (Ir.Expr.Variable) lhs;
 
-            requireSubtype(rhs.type(), variable.type());
+            if (!rhs.type().equals(Type.ANY)) {
+                requireSubtype(rhs.type(), variable.type());
+            }
 
             return new Ir.Stmt.Assignment.Variable(variable, rhs);
 
@@ -250,7 +252,9 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
         } else if (lhs instanceof Ir.Expr.Property) {
             Ir.Expr.Property property = (Ir.Expr.Property) lhs;
 
-            requireSubtype(rhs.type(), property.type());
+            if (!rhs.type().equals(Type.ANY)) {
+                requireSubtype(rhs.type(), property.type());
+            }
 
             return new Ir.Stmt.Assignment.Property(property, rhs);
 
@@ -504,7 +508,7 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
 
             Type field_type;
             if (type.isPresent()) {
-                field_type = Environment.TYPES.get(field.type().get());    // if type declared then explicit type
+                field_type = type.get();    // if type declared then explicit type
             } else if (value.isPresent()) {
                 field_type = value.get().type();                         // O.W. if value then inferred type
             } else {
@@ -521,7 +525,6 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
         }
 
         // handle methods
-        var methods = new ArrayList<Ir.Stmt.Def>();
         for (var method : ast.methods()) {
             // check if name already defined in current scope
             if (object_scope.get(method.name(), true).isPresent()) {
@@ -540,7 +543,7 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
                 Type type = Type.ANY;
                 if (type_str.isPresent()) {
                     if (!Environment.TYPES.containsKey(type_str.get())) {
-                        throw new AnalyzeException("Type '" + type_str + "' is not a valid type");
+                        throw new AnalyzeException("Type '" + type_str.get() + "' is not a valid type");
                     }
                     type = Environment.TYPES.get(type_str.get());
                 }
@@ -560,8 +563,16 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
 
             var method_type = new Type.Function(parameter_types, return_type);
             object_scope.define(method.name(), method_type);
+        }
 
-            // scope within function body
+        // handle method bodies
+        var methods = new ArrayList<Ir.Stmt.Def>();
+        for (var method : ast.methods()) {
+            Type return_type = Type.ANY;
+            if (method.returnType().isPresent()) {
+                return_type = Environment.TYPES.get(method.returnType().get());
+            }
+
             Scope method_scope = new Scope(object_scope);
 
             method_scope.define("this", object_type);
@@ -569,8 +580,12 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
             var parameters = new ArrayList<Ir.Stmt.Def.Parameter>();
             for (int i = 0; i < method.parameters().size(); i++) {
                 String name = method.parameters().get(i);
-                Type type = parameter_types.get(i);
-                scope.define(name, type);
+                Type type = i < method.parameterTypes().size() && method.parameterTypes().get(i).isPresent() ?
+                        Environment.TYPES.get(method.parameterTypes().get(i).get()) :
+                        Type.ANY;
+
+                method_scope.define(name, type);
+
                 parameters.add(new Ir.Stmt.Def.Parameter(name, type));
             }
 
