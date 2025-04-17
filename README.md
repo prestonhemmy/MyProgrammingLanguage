@@ -1,5 +1,7 @@
 # MyProgrammingLanguage
 
+![Thumbnail Image](thumbnail.jpg)
+
 This repository contains an implementation of a custom programming language. The goal is to develop a full-featured language with its own syntax, semantics, and runtime.
 
 The project includes a lexer, parser, and evaluator. The lexer breaks the source code into tokens based on the language grammar, the parser generates an Abstract Syntax Tree (AST) representing the program structure, and the evaluator executes the AST to produce program output.

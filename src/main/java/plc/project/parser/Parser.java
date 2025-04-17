@@ -59,15 +59,32 @@ public final class Parser {
     }
 
     private Ast.Stmt.Let parseLetStmt() throws ParseException {
-        // let_stmt ::= 'LET' identifier ('=' expr)? ';'
+        // let_stmt ::= 'LET' identifier (':' identifier)? ('=' expr)? ';'
+
         checkState(tokens.match("LET"));
 
-        // Handle missing identifier
+        // Handle missing 'name' identifier
         if (!tokens.match(Token.Type.IDENTIFIER)) {
             throw new ParseException("Expected IDENTIFIER after 'LET' but found " + tokens.get(0));
         }
 
         var name = tokens.get(-1).literal();
+
+        // check for optional type
+        Optional<String> type = Optional.empty();
+        if (tokens.match(":")) {
+            // handle missing type
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected type after ':' but found nothing");
+            }
+
+            // handle missing 'type' identifier
+            if (!tokens.match(Token.Type.IDENTIFIER)) {
+                throw new ParseException("Expected IDENTIFIER after ':' but found " + tokens.get(0));
+            }
+
+            type = Optional.of(tokens.get(-1).literal());
+        }
 
         // Check if Initialization O.W. Declaration
         Optional<Ast.Expr> value = Optional.empty();
@@ -86,11 +103,13 @@ public final class Parser {
 
         requireStatementTerminator();
 
-        return new Ast.Stmt.Let(name, value);
+        return new Ast.Stmt.Let(name, type, value);
     }
 
     private Ast.Stmt.Def parseDefStmt() throws ParseException {
-        // def_stmt ::= 'DEF' identifier '(' (identifier (',' identifier)*)? ')' 'DO' stmt* 'END'
+        //  def_stmt ::= 'DEF' identifier '('
+        //              (identifier (':' identifier)? (',' identifier (':' identifier)?)*)?
+        //              ')' (':' identifier)? 'DO' stmt* 'END'
         checkState(tokens.match("DEF"));
         checkState(tokens.match(Token.Type.IDENTIFIER));
 
@@ -101,6 +120,7 @@ public final class Parser {
         }
 
         var parameters = new ArrayList<String>();
+        var parameter_types = new ArrayList<Optional<String>>();
 
         // Check for parameters
         if (!tokens.peek(")")) {
@@ -111,11 +131,46 @@ public final class Parser {
 
                 var param = tokens.get(-1).literal();
                 parameters.add(param);
+
+                // check for optional parameter type
+                Optional<String> type = Optional.empty();
+                if (tokens.match(":")) {
+                    // handle missing type
+                    if (!tokens.has(0)) {
+                        throw new ParseException("Expected type after ':' but found nothing");
+                    }
+
+                    // handle missing 'type' identifier
+                    if (!tokens.match(Token.Type.IDENTIFIER)) {
+                        throw new ParseException("Expected IDENTIFIER after ':' but found " + tokens.get(0));
+                    }
+
+                    type = Optional.of(tokens.get(-1).literal());
+                }
+
+                parameter_types.add(type);
+
             } while (tokens.match(","));
         }
 
         if (!tokens.match(")")) {
             throw new ParseException("Expected ')' but found " + tokens.get(0));
+        }
+
+        // handle optional return type
+        Optional<String> type = Optional.empty();
+        if (tokens.match(":")) {
+            // handle missing type
+            if (!tokens.has(0)) {
+                throw new ParseException("Expected type after ':' but found nothing");
+            }
+
+            // handle missing 'type' identifier
+            if (!tokens.match(Token.Type.IDENTIFIER)) {
+                throw new ParseException("Expected IDENTIFIER after ':' but found " + tokens.get(0));
+            }
+
+            type = Optional.of(tokens.get(-1).literal());
         }
 
         if (!tokens.match("DO")) {
@@ -136,7 +191,7 @@ public final class Parser {
             throw new ParseException("Expected END but found " + tokens.get(0));
         }
 
-        return new Ast.Stmt.Def(name, parameters, body);
+        return new Ast.Stmt.Def(name, parameters, parameter_types, type, body);
     }
 
     private Ast.Stmt.If parseIfStmt() throws ParseException {
