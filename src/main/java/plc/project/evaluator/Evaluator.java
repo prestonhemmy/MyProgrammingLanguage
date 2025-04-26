@@ -532,6 +532,14 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         // check if function type
         var funct = requireType(function.get(), RuntimeValue.Function.class);
 
+        // TODO: Check arity ?
+        // similar to analyze function check:
+        // if (ast.arguments().size() != function.parameters().size()) {
+        //            throw new AnalyzeException("Function '" + ast.name() + "' expects " + function.parameters().size() +
+        //                                       (function.parameters().size() == 1 ? " argument " : " arguments ") +
+        //                                       "but found " + ast.arguments().size());
+        //        }
+
         var evaluated_args = new java.util.ArrayList<RuntimeValue>();
         for (var arg : ast.arguments()) {
             evaluated_args.add(visit(arg));
@@ -569,6 +577,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         return method_funct.definition().invoke(evaluated_args);
     }
 
+    // TODO: object scope should be a child of null not the current scope as per analyzer specs
     @Override
     public RuntimeValue visit(Ast.Expr.ObjectExpr ast) throws EvaluateException {
         var object_scope = new Scope(scope);
@@ -590,7 +599,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
             }
 
             object_scope.define(field.name(), value);
-            }
+        }
 
         // method handling
         Scope def_scope = scope;            // scope where object is defined
