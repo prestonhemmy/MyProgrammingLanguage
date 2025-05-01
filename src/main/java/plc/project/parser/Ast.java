@@ -4,7 +4,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
+/**
+ * IMPORTANT: DO NOT CHANGE! This file is part of our project's API and should
+ * not be modified by your solution.
+ */
 public sealed interface Ast {
 
     record Source(
@@ -31,7 +36,7 @@ public sealed interface Ast {
             List<Stmt> body
         ) implements Stmt {
             public Def(String name, List<String> parameters, List<Stmt> body) {
-                this(name, parameters, List.of(), Optional.empty(), body);
+                this(name, parameters, Stream.generate(Optional::<String>empty).limit(parameters.size()).toList(), Optional.empty(), body);
             }
         }
 
