@@ -20,7 +20,15 @@ public final class LexerTests {
         return Stream.of(
             Arguments.of("Space", " ", true),
             Arguments.of("Newline", "\n", true),
-            Arguments.of("Multiple", "   \n   ", true)
+            Arguments.of("Multiple", "   \n   ", true),
+            // Additional Testcases
+            Arguments.of("Tab", "\t", true),
+            Arguments.of("Carriage Return", "\r", true),
+            Arguments.of("Mixed Whitespace", " \t\n\r", true),
+            Arguments.of("Backspace", "\b", true),
+            Arguments.of("Form Feed", "\f", false),
+            Arguments.of("Multiple Valid Whitespace", "\b\b\b", true)
+
         );
     }
 
@@ -33,7 +41,11 @@ public final class LexerTests {
     public static Stream<Arguments> testComment() {
         return Stream.of(
             Arguments.of("Comment", "//comment", true),
-            Arguments.of("Multiple", "//first\n//second", true)
+            Arguments.of("Multiple", "//first\n//second", true),
+            // Additional Testcases
+            Arguments.of("Empty Comment", "//", true),
+            Arguments.of("Comment With Special Chars", "//!@#$%^&*()", true),
+            Arguments.of("Leading Comment", "//comment\ntoken", false)
         );
     }
 
@@ -63,7 +75,9 @@ public final class LexerTests {
             Arguments.of("Single Digit", "1", true),
             Arguments.of("Multiple Digits", "123", true),
             Arguments.of("Exponent", "1e10", true),
-            Arguments.of("Missing Exponent Digits", "1e", false)
+            Arguments.of("Missing Exponent Digits", "1e", false),
+            // Additional Testcase
+            Arguments.of("Signed Exponent", "1e+2", true)
         );
     }
 
@@ -78,7 +92,9 @@ public final class LexerTests {
             Arguments.of("Integer", "1", false),
             Arguments.of("Multiple Digits", "123.456", true),
             Arguments.of("Exponent", "1.0e10", true),
-            Arguments.of("Trailing Decimal", "1.", false)
+            Arguments.of("Trailing Decimal", "1.", false),
+            // Additional Testcase
+            Arguments.of("Exponent Sign", "1.0e-2", true)
         );
     }
 
@@ -108,7 +124,10 @@ public final class LexerTests {
             Arguments.of("Empty", "\"\"", true),
             Arguments.of("Alphabetic", "\"string\"", true),
             Arguments.of("Newline Escape", "\"Hello,\\nWorld\"", true),
-            Arguments.of("Invalid Escape", "\"invalid\\escape\"", false)
+            Arguments.of("Invalid Escape", "\"invalid\\escape\"", false),
+            // Additional Testcases
+            Arguments.of("Unterminated", "\"unterminated\n", false),
+            Arguments.of("Newline Characters", "\"contains\nnewline\"", false)
         );
     }
 
@@ -121,7 +140,9 @@ public final class LexerTests {
     public static Stream<Arguments> testOperator() {
         return Stream.of(
             Arguments.of("Character", "(", true),
-            Arguments.of("Comparison", "<=", true)
+            Arguments.of("Comparison", "<=", true),
+            // Additional Testcase
+            Arguments.of("Form Feed", "\f", true)
         );
     }
 
@@ -156,6 +177,15 @@ public final class LexerTests {
             Arguments.of("Operator Multiple Operators", "<=>", List.of(
                 new Token(Token.Type.OPERATOR, "<="),
                 new Token(Token.Type.OPERATOR, ">")
+            )),
+            // Additional Testcases
+            Arguments.of("Decimal Missing Exponent Digits", "1.0e", List.of(
+                new Token(Token.Type.DECIMAL, "1.0"),
+                new Token(Token.Type.IDENTIFIER, "e")
+            )),
+            Arguments.of("Decimal Missing Exponent Digits With Sign", "1.0e-", List.of(
+                new Token(Token.Type.DECIMAL, "1.0"),
+                new Token(Token.Type.IDENTIFIER, "e-")
             ))
         );
     }
@@ -170,7 +200,9 @@ public final class LexerTests {
         return Stream.of(
             Arguments.of("Character Unterminated", "\'u"),
             Arguments.of("Character Multiple", "\'abc\'"),
-            Arguments.of("String Invalid Escape", "\"invalid\\escape\"")
+            Arguments.of("String Invalid Escape", "\"invalid\\escape\""),
+            // Additional Testcase
+            Arguments.of("String Unterminated Newline", "\"unterminated\n")
         );
     }
 
@@ -195,6 +227,13 @@ public final class LexerTests {
                 new Token(Token.Type.STRING, "\"Hello, World!\""),
                 new Token(Token.Type.OPERATOR, ")"),
                 new Token(Token.Type.OPERATOR, ";")
+            )),
+            // Additional Testcase
+            Arguments.of("FizzBuzz", "END END END END", List.of(
+                new Token(Token.Type.IDENTIFIER, "END"),
+                new Token(Token.Type.IDENTIFIER, "END"),
+                new Token(Token.Type.IDENTIFIER, "END"),
+                new Token(Token.Type.IDENTIFIER, "END")
             ))
         );
     }

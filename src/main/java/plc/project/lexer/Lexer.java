@@ -43,18 +43,39 @@ public final class Lexer {
 
     private void lexWhitespace() {
         // whitespace ::= [\b\n\r\t]+
-//        while (chars.match("[\\n\\r\\t\\x08]")) {}     // Note: Fails test case locally
-        while (chars.has(0) && chars.peek("\\s")) {
-            chars.index++;
-        }   // Note: Update to handle properly
+        while (chars.has(0)) {
+            char c = chars.input.charAt(chars.index);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\b') {
+                chars.index++;
+            } else {
+                break;
+            }
+        }
+
+        // reset length to skip
+        chars.length = 0;
     }
 
     private void lexComment() {
         // comment ::= '/''/'[^\n\r]*
-        if (chars.match("/", "/")) {
-            while (chars.has(0) && !chars.match("\\n\\r")) {
-//                chars.match(".");   // Note: Fails test case locally
-                chars.index++;          // Note: Update to handle properly
+        if (chars.has(1) && chars.input.charAt(chars.index) == '/' && chars.input.charAt(chars.index + 1) == '/') {
+            chars.index += 2;
+
+            while (chars.has(0)) {
+                char c = chars.input.charAt(chars.index);
+                if (c == '\n' || c == '\r') {
+                    break;
+                }
+
+                chars.index++;
+            }
+
+            // reset the length to skip
+            chars.length = 0;
+
+            lexWhitespace();
+            if (chars.has(1) && chars.input.charAt(chars.index) == '/' && chars.input.charAt(chars.index + 1) == '/') {
+                lexComment();
             }
         }
     }
@@ -110,12 +131,16 @@ public final class Lexer {
             while (chars.match("[0-9]")) {}
         }
 
+        int saved_index = chars.index;
+        int saved_length = chars.length;
+
         if (chars.match("e")) {
             // Check exponent digits exist
             if (!chars.match("[0-9]")) {
-                chars.index--;
-                chars.length--;
-                return new Token(Token.Type.INTEGER, chars.emit());
+                chars.index = saved_index;
+                chars.length = saved_length;
+
+                return isDecimal ? new Token(Token.Type.DECIMAL, chars.emit()) : new Token(Token.Type.INTEGER, chars.emit());
             }
 
             while (chars.match("[0-9]")) {}
@@ -128,7 +153,7 @@ public final class Lexer {
         // character ::= ['] ([^'\n\r\\] | escape) [']
         if (chars.peek("'")) {
             throw new LexException("Invalid character literal: empty");
-        } else if (chars.peek("\\n\\r")) {
+        } else if (chars.peek("[\\n\\r]")) {
             throw new LexException("Invalid character literal: NL or CR");
         } else if (chars.match("\\\\")) {
             lexEscape();
@@ -150,7 +175,7 @@ public final class Lexer {
         }
 
         while (!chars.peek("\"")) {
-            if (chars.peek("\\n\\r")) {
+            if (chars.peek("[\\n\\r]")) {
                 throw new LexException("Invalid string literal: NL or CR");
             }
             if (chars.match("\\\\")) {
