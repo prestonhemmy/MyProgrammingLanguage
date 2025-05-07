@@ -898,6 +898,103 @@ final class EvaluatorTests {
                 ),
                 null, // EvaluateException
                 List.of()
+            ),
+            Arguments.of("Op== Object Equality",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "==",
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value")))),
+                            List.of()
+                        ),
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value")))),
+                            List.of()
+                        )
+                    )
+                ),
+                new RuntimeValue.Primitive(true),
+                List.of()
+            ),
+            Arguments.of("Op!= Object Inequality",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "!=",
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value1")))),
+                            List.of()
+                        ),
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("field", Optional.of(new Ast.Expr.Literal("value2")))),
+                            List.of()
+                        )
+                    )
+                ),
+                new RuntimeValue.Primitive(true),
+                List.of()
+            ),
+            Arguments.of("Op== Object Equality 2",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "==",
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(
+                                new Ast.Stmt.Let("field1", Optional.of(new Ast.Expr.Literal("value1"))),
+                                new Ast.Stmt.Let("field2", Optional.of(new Ast.Expr.Literal("value2")))
+                            ),
+                            List.of(
+                                new Ast.Stmt.Def("method", List.of(), List.of())
+                            )
+                        ),
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(
+                                new Ast.Stmt.Let("field1", Optional.of(new Ast.Expr.Literal("value1"))),
+                                new Ast.Stmt.Let("field2", Optional.of(new Ast.Expr.Literal("value2")))
+                            ),
+                            List.of(
+                                new Ast.Stmt.Def("method", List.of(), List.of())
+                            )
+                        )
+                    )
+                ),
+                new RuntimeValue.Primitive(true),
+                List.of()
+            ),
+            Arguments.of("Op== Object-Primitive Equality",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "==",
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(),
+                            List.of()
+                        ),
+                        new Ast.Expr.Literal("string")
+                    )
+                ),
+                new RuntimeValue.Primitive(false),
+                List.of()
+            ),
+            Arguments.of("Op!= Object-Primitive Inequality",
+                new Input.Ast(
+                    new Ast.Expr.Binary(
+                        "!=",
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(),
+                            List.of()
+                        ),
+                        new Ast.Expr.Literal("string")
+                    )
+                ),
+                new RuntimeValue.Primitive(true),
+                List.of()
             )
         );
     }
@@ -1215,6 +1312,25 @@ final class EvaluatorTests {
                     )
                 ),
                 null, // EvaluateException
+                List.of()
+            ),
+            Arguments.of("Field Shadowing",
+                new Input.Ast(
+                    new Ast.Expr.Method(
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("variable", Optional.of(new Ast.Expr.Literal("inner")))),
+                            List.of(new Ast.Stmt.Def(
+                                "getField",
+                                List.of(),
+                                List.of(new Ast.Stmt.Return(Optional.of(new Ast.Expr.Variable("variable"))))
+                            ))
+                        ),
+                        "getField",
+                        List.of()
+                    )
+                ),
+                new RuntimeValue.Primitive("inner"),
                 List.of()
             )
         );

@@ -432,6 +432,16 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
                 throw new EvaluateException("Invalid operands for '/' operator");
 
             case "==":
+                // check if object comparison
+                if (left instanceof RuntimeValue.ObjectValue && right instanceof RuntimeValue.ObjectValue) {
+                    return new RuntimeValue.Primitive(java.util.Objects.equals(left, right));
+                }
+
+                // check if object-primitive comparison
+                if (left instanceof RuntimeValue.ObjectValue || right instanceof RuntimeValue.ObjectValue) {
+                    return new RuntimeValue.Primitive(false);
+                }
+
                 left_primitive = requireType(left, RuntimeValue.Primitive.class);
                 var right_primitive = requireType(right, RuntimeValue.Primitive.class);
 
@@ -440,6 +450,16 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
 
             case "!=":
+                // check if object comparison
+                if (left instanceof RuntimeValue.ObjectValue && right instanceof RuntimeValue.ObjectValue) {
+                    return new RuntimeValue.Primitive(!java.util.Objects.equals(left, right));
+                }
+
+                // check if object-primitive comparison
+                if (left instanceof RuntimeValue.ObjectValue || right instanceof RuntimeValue.ObjectValue) {
+                    return new RuntimeValue.Primitive(true);
+                }
+
                 left_primitive = requireType(left, RuntimeValue.Primitive.class);
                 right_primitive = requireType(right, RuntimeValue.Primitive.class);
 
@@ -532,14 +552,6 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         // check if function type
         var funct = requireType(function.get(), RuntimeValue.Function.class);
 
-        // TODO: Check arity ?
-        // similar to analyze function check:
-        // if (ast.arguments().size() != function.parameters().size()) {
-        //            throw new AnalyzeException("Function '" + ast.name() + "' expects " + function.parameters().size() +
-        //                                       (function.parameters().size() == 1 ? " argument " : " arguments ") +
-        //                                       "but found " + ast.arguments().size());
-        //        }
-
         var evaluated_args = new java.util.ArrayList<RuntimeValue>();
         for (var arg : ast.arguments()) {
             evaluated_args.add(visit(arg));
@@ -577,17 +589,15 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
         return method_funct.definition().invoke(evaluated_args);
     }
 
-    // TODO: object scope should be a child of null not the current scope as per analyzer specs
     @Override
     public RuntimeValue visit(Ast.Expr.ObjectExpr ast) throws EvaluateException {
-        var object_scope = new Scope(scope);
-
-        var object_value = new RuntimeValue.ObjectValue(ast.name(), new Scope(object_scope));
+        var object_scope = new Scope(null);
+        var object_value = new RuntimeValue.ObjectValue(ast.name(), object_scope);
 
         // property handling
         for (var field : ast.fields()) {
             // check if field name already defined in object scope
-            if (object_scope.get(field.name(), false).isPresent()) {
+            if (object_scope.get(field.name(), true).isPresent()) {
                 throw new EvaluateException("Variable '" + field.name() + "' is already defined in '" + ast.name() + "'s' scope");
             }
 
@@ -629,7 +639,7 @@ public final class Evaluator implements Ast.Visitor<RuntimeValue, EvaluateExcept
 
                 try {
                     // scope within method definition body
-                    scope = new Scope(def_scope);
+                    scope = new Scope(object_scope);
 
                     scope.define("this", arguments.getFirst());
 
