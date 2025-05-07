@@ -480,7 +480,7 @@ public final class Analyzer implements Ast.Visitor<Ir, AnalyzeException> {
             throw new AnalyzeException("Object '" + ast.name().get() + "' is already a predefined type");
         }
 
-        Scope object_scope = new Scope(null);
+        Scope object_scope = new Scope(scope);
         Type.Object object_type = new Type.Object(object_scope);
 
         Scope original_scope = scope;

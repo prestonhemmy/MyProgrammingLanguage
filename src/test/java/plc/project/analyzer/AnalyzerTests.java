@@ -1723,6 +1723,28 @@ final class AnalyzerTests {
                     )
                 ),
                 null // AnalyzeException
+            ),
+            Arguments.of("Value Parent Access",
+                new Input.Ast(
+                    new Ast.Expr.Property(
+                        new Ast.Expr.ObjectExpr(
+                            Optional.empty(),
+                            List.of(new Ast.Stmt.Let("name", Optional.empty(), Optional.of(new Ast.Expr.Variable("variable")))),
+                            List.of()
+                        ),
+                        "name"
+                    )
+                ),
+                new Ir.Expr.Property(
+                    new Ir.Expr.ObjectExpr(
+                        Optional.empty(),
+                        List.of(new Ir.Stmt.Let("name", Type.STRING, Optional.of(new Ir.Expr.Variable("variable", Type.STRING)))),
+                        List.of(),
+                        createObjectType.apply(Map.of("name", Type.STRING))
+                    ),
+                    "name",
+                    Type.STRING
+                )
             )
         );
     }
