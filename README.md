@@ -4,7 +4,7 @@
 
 This repository contains an implementation of a custom programming language. The goal is to develop a full-featured language with its own syntax, semantics, and runtime.
 
-The project includes a lexer, parser, and evaluator. The lexer breaks the source code into tokens based on the language grammar, the parser generates an Abstract Syntax Tree (AST) representing the program structure, and the evaluator executes the AST to produce program output.
+The project includes a lexer, parser, analyzer, generator, and evaluator. The lexer breaks the source code into tokens based on the language grammar, the parser generates an Abstract Syntax Tree (AST) representing the program structure, the analyzer performs semantic analysis and type checking, the generator transpiles the code to Java, and the evaluator executes the AST to produce program output.
 
 ## Key Components
 
@@ -17,6 +17,22 @@ The project includes a lexer, parser, and evaluator. The lexer breaks the source
 - Hand-written recursive descent parser
 - Transforms token stream into a structured AST
 - Handles expressions, statements, function definitions, and control flow
+- Supports optional type annotations for variables and functions
+
+### Analyzer
+- Performs static semantic analysis on the AST
+- Implements type checking and ensures type safety
+- Validates variable and function declarations and usages
+- Ensures proper scoping and variable resolution
+- Verifies that operations are performed on compatible types
+- Catches semantic errors before execution
+
+### Generator
+- Transpiles the validated AST to Java source code
+- Handles translation of language constructs to equivalent Java code
+- Supports hoisting of declarations to meet Java requirements
+- Manages appropriate type conversions and method calls
+- Produces executable Java program that preserves language semantics
 
 ### Evaluator
 - Implements the visitor pattern to traverse and evaluate the AST
@@ -28,15 +44,18 @@ The project includes a lexer, parser, and evaluator. The lexer breaks the source
 
 ### Data Types
 - Dynamic typing with runtime type checking
+- Optional static type annotations for compile-time validation
 - Primitive values: booleans, integers (`BigInteger`), decimals (`BigDecimal`), strings, and nil
 - Composite types: functions and objects
 - Lists (through the native `list` function)
+- Type hierarchy with subtypes (Any, Equatable, Comparable, Iterable)
 
 ### Variables and Scoping
 - Lexical (static) scoping with proper closure behavior
 - Block-level variable declarations
 - Variable shadowing between scopes
 - Mutable variables and object properties
+- Optional type annotations: `LET x: Integer = 10;`
 
 ### Control Flow
 - Conditional statements (`IF`/`ELSE`)
@@ -48,11 +67,19 @@ The project includes a lexer, parser, and evaluator. The lexer breaks the source
 - Support for closures (functions capturing their lexical environment)
 - Optional return values (defaulting to NIL)
 - Parameter validation and arity checking
+- Optional type annotations for parameters and return values:
+  ```
+  DEF add(a: Integer, b: Integer): Integer DO
+    RETURN a + b;
+  END
+  ```
 
 ### Objects and Methods
 - Object literals with fields and methods
 - Method invocation with dynamic dispatch
 - Property access and modification
+- Type-checked access to object properties and methods
+- Implicit `this` parameter in methods
 
 ### Standard Library
 - `print(value)`: Displays formatted values to standard output
@@ -91,6 +118,33 @@ The evaluator provides a set of built-in functions:
 - `list(values...)`: Creates a list containing all the provided arguments
 - `range(start, end)`: Generates a list of integers from start (inclusive) to end (exclusive)
 
+### Type System and Semantic Analysis
+The analyzer implements a static type system:
+- Types form a hierarchy with proper subtyping relationships:
+    - All types are subtypes of `Any`
+    - `Nil`, `Comparable` (and subtypes), and `Iterable` are subtypes of `Equatable`
+    - `Boolean`, `Integer`, `Decimal`, and `String` are subtypes of `Comparable`
+- Type checking ensures operations are performed on compatible types
+- Type inference allows omitting explicit type annotations where possible
+- Variables and functions are resolved within their appropriate scope
+- Semantic errors are caught before execution
+- The special `$RETURNS` variable tracks function return types internally
+
+### Code Generation Approach
+The generator transpiles to Java code with the following strategies:
+- Top-level declarations are hoisted to class level (handling nested functions limitation)
+- Binary operations are translated to equivalent Java method calls:
+    - Arithmetic: `.add()`, `.subtract()`, `.multiply()`, `.divide()`
+    - Comparison: `.compareTo()` with appropriate operators
+    - Equality: `Objects.equals()` and `!Objects.equals()`
+- Language constructs map to Java equivalents:
+    - Object expressions become anonymous Java objects
+    - For loops use Java's enhanced for loop syntax
+    - Control flow and conditional logic translate directly
+- Type handling is managed with appropriate Java types:
+    - `BigInteger` and `BigDecimal` for numeric operations
+    - Java's native String and Boolean for string and boolean operations
+
 ## Grammar
 
 The language grammar is defined as follows:
@@ -98,8 +152,8 @@ The language grammar is defined as follows:
 ```
 source ::= stmt*
 stmt::= let_stmt | def_stmt | if_stmt | for_stmt | return_stmt | expression_or_assignment_stmt
-let_stmt ::= 'LET' identifier ('=' expr)? ';'
-def_stmt ::= 'DEF' identifier '(' (identifier (',' identifier)*)? ')' 'DO' stmt* 'END'
+let_stmt ::= 'LET' identifier (':' identifier)? ('=' expr)? ';'
+def_stmt ::= 'DEF' identifier '(' (identifier (':' identifier)? (',' identifier (':' identifier)?)*)? ')' (':' identifier)? 'DO' stmt* 'END'
 if_stmt ::= 'IF' expr 'DO' stmt* ('ELSE' stmt*)? 'END'
 for_stmt ::= 'FOR' identifier 'IN' expr 'DO' stmt* 'END'
 return_stmt ::= 'RETURN' expr? ';'
@@ -126,9 +180,17 @@ LET y = 20;
 print(x + y);  // Output: 30
 ```
 
-### Functions
+### Type Annotations
 ```
-DEF factorial(n) DO
+LET name: String = "Alice";
+LET age: Integer = 30;
+LET pi: Decimal = 3.14159;
+LET active: Boolean = TRUE;
+```
+
+### Functions with Type Annotations
+```
+DEF factorial(n: Integer): Integer DO
   IF n <= 1 DO
     RETURN 1;
   END
@@ -138,17 +200,17 @@ END
 print(factorial(5));  // Output: 120
 ```
 
-### Objects and Methods
+### Objects and Methods with Types
 ```
 LET person = OBJECT DO
-  LET name = "Alice";
-  LET age = 30;
+  LET name: String = "Alice";
+  LET age: Integer = 30;
   
-  DEF greet() DO
+  DEF greet(): String DO
     RETURN "Hello, my name is " + this.name;
   END
   
-  DEF birthday() DO
+  DEF birthday(): Integer DO
     this.age = this.age + 1;
     RETURN this.age;
   END
@@ -158,7 +220,7 @@ print(person.greet());  // Output: Hello, my name is Alice
 print(person.birthday());  // Output: 31
 ```
 
-### Iteration
+### Iteration with Type Inference
 ```
 FOR i IN range(1, 5) DO
   print(i);
@@ -170,8 +232,21 @@ END
 // 4
 ```
 
+### Type Checking at Compile Time
+```
+LET x: Integer = 42;
+LET s: String = "Hello";
+
+// This would fail at compile time (analyzer phase):
+// x = s;  // Cannot assign String to Integer
+
+// This would fail at compile time (analyzer phase):
+// x + s;  // Cannot add String to Integer unless one operand is String
+```
+
 ## Usage
 
+### Running from Source
 Use the REPL for interactive coding:
 
 ```
@@ -197,9 +272,31 @@ Multiline input - enter an empty line to submit:
 55
 ```
 
-## Future Work
-- Compiler implementation (JVM bytecode or WebAssembly)
-- Extended standard library
-- Module system
-- Enhanced error reporting and debugging tools
-- Performance optimizations
+### Compiling to Java
+To compile and run a source file:
+
+```
+$ java plc.project.Compiler source.plc
+$ java Main
+```
+
+This will:
+1. Parse the source file
+2. Analyze the program for semantic errors
+3. Generate Java source code
+4. Compile the Java code
+5. Run the resulting program
+
+## Development Status
+This project is a complete implementation of a custom programming language, featuring:
+- Lexical analysis and parsing
+- Semantic analysis and type checking
+- Code generation to Java
+- Interpretation/evaluation
+
+Future enhancements could include:
+- Optimizations in the analyzer and generator
+- Improved error reporting and diagnostics
+- Support for modules and imports
+- Extension of the standard library
+- Support for generics and more advanced type features
